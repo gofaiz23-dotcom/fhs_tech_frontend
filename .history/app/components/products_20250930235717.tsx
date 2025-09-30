@@ -71,7 +71,7 @@ const Filters = ({ searchQuery, onSearchChange, listedFilter, onChangeListed }: 
 	return (
 		<aside className="w-full md:w-64 border md:border-0 md:border-r bg-white p-4 rounded md:rounded-none">
 			<h3 className="font-semibold text-gray-800 mb-3">Filter Products</h3>
-			<div className="mb-4 relative">
+			<div className="mb-4">
 				<input
 					type="text"
 					placeholder="Search products"

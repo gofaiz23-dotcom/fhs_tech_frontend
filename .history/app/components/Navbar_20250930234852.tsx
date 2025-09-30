@@ -24,7 +24,7 @@ export default function Navbar() {
     isActive(href) ? "text-yellow-300 underline" : "hover:underline";
 
   return (
-    <nav className=" bg-cyan-500 text-white shadow-md w-full">
+    <nav className="bg-gradient-to-r from-cyan-500 to-violet-700 text-white shadow-md w-full">
       {" "}
       <div className="flex items-center justify-between px-6 py-4">
         {/* Left: Logo */}{" "}

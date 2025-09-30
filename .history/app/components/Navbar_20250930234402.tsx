@@ -24,7 +24,7 @@ export default function Navbar() {
     isActive(href) ? "text-yellow-300 underline" : "hover:underline";
 
   return (
-    <nav className=" bg-cyan-500 text-white shadow-md w-full">
+    <nav className="bg-purple-700 text-white shadow-md w-full">
       {" "}
       <div className="flex items-center justify-between px-6 py-4">
         {/* Left: Logo */}{" "}
@@ -33,8 +33,8 @@ export default function Navbar() {
           <Image
             src="/fhs-tech-logo.png"
             alt="brand logo"
-            width={130}
-            height={130}
+            width={150}
+            height={150}
           />{" "}
         </Link>
         {/* Desktop Menu */}

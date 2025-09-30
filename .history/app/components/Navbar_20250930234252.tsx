@@ -24,7 +24,7 @@ export default function Navbar() {
     isActive(href) ? "text-yellow-300 underline" : "hover:underline";
 
   return (
-    <nav className=" bg-cyan-500 text-white shadow-md w-full">
+    <nav className="bg-purple-700 text-white shadow-md w-full">
       {" "}
       <div className="flex items-center justify-between px-6 py-4">
         {/* Left: Logo */}{" "}
@@ -33,8 +33,8 @@ export default function Navbar() {
           <Image
             src="/fhs-tech-logo.png"
             alt="brand logo"
-            width={130}
-            height={130}
+            width={60}
+            height={60}
           />{" "}
         </Link>
         {/* Desktop Menu */}
@@ -46,7 +46,7 @@ export default function Navbar() {
           {/* Products Dropdown (Desktop) */}
           <div className="relative group">
             <button className="flex items-center hover:underline">
-              Products <ChevronDown size={16} className="" />
+              Products <ChevronDown size={16} className="ml-1" />
             </button>
             <div className="absolute left-0  hidden group-hover:block bg-white text-gray-800 rounded shadow-md min-w-[160px]">
               <Link

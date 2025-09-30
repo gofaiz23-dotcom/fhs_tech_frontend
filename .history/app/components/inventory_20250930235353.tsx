@@ -1,6 +1,6 @@
 "use client"
 import React from 'react'
-import { Search } from 'lucide-react'
+import {Search} from 'lucide-react'
 
 type ApiProduct = {
   id: number
@@ -140,7 +140,7 @@ export default function Inventory() {
           <div className="text-xs text-gray-600 mb-2">{filtered.length} inventory SKUs found</div>
           <div className="mb-4 relative">
             <input value={search} onChange={(e)=>{setSearch(e.target.value); setPage(1)}} placeholder="Search inventory" className="w-full border rounded pl-3 pr-8 py-2 text-sm" />
-            <span className="absolute right-2 top-2.5 text-gray-400"><Search/></span>
+            <span className="absolute right-2 top-2.5 text-gray-400">{Search}</span>
           </div>
           <div className="mb-2 text-sm text-gray-700">Tags</div>
           <input value={tagQuery} onChange={(e)=>{setTagQuery(e.target.value); setPage(1)}} placeholder="Search Tags" className="w-full border rounded px-3 py-2 text-sm mb-4" />
