@@ -83,10 +83,10 @@ export default function Navbar() {
             <Settings size={18} strokeWidth={2} />
           </Link>
           <Link href="/login" className="hover:text-gray-200 transition text-sm">Login</Link>
-          {/* <div className="flex items-center bg-purple-800 px-3 py-1 rounded text-sm font-medium cursor-pointer hover:bg-purple-900 transition">
+          <div className="flex items-center bg-purple-800 px-3 py-1 rounded text-sm font-medium cursor-pointer hover:bg-purple-900 transition">
             ths
             <ChevronDown size={16} className="ml-1" />
-          </div> */}
+          </div>
         </div>
         {/* Mobile Hamburger */}
         <button
@@ -98,7 +98,7 @@ export default function Navbar() {
       </div>
       {/* Mobile Menu */}
       {menuOpen && (
-        <div className="md:hidden bg-blue-600 text-white px-6 pb-4 space-y-4">
+        <div className="md:hidden bg-purple-800 text-white px-6 pb-4 space-y-4">
           <Link
             href="/dashboard"
             className="block hover:underline"

@@ -83,10 +83,10 @@ export default function Navbar() {
             <Settings size={18} strokeWidth={2} />
           </Link>
           <Link href="/login" className="hover:text-gray-200 transition text-sm">Login</Link>
-          {/* <div className="flex items-center bg-purple-800 px-3 py-1 rounded text-sm font-medium cursor-pointer hover:bg-purple-900 transition">
+          <div className="flex items-center bg-purple-800 px-3 py-1 rounded text-sm font-medium cursor-pointer hover:bg-purple-900 transition">
             ths
             <ChevronDown size={16} className="ml-1" />
-          </div> */}
+          </div>
         </div>
         {/* Mobile Hamburger */}
         <button

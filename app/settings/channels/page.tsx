@@ -1,6 +1,6 @@
-import SettingsLayout from "../../components/settings/SettingsLayout";
+import SettingsLayout from "../_components/SettingsLayout";
 import Link from 'next/link'
-import ChannelLogo from "../../components/settings/ChannelLogo"
+import ChannelLogo from "../_components/ChannelLogo"
 
 const marketplaces = [
   { name: 'Amazon', desc: "World's largest, with tens of millions of shoppers.", href: '#'},
