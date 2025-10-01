@@ -15,4 +15,3 @@ export default function ChannelLogo({ name }: { name: string }) {
   )
 }
 
-

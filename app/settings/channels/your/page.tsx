@@ -1,5 +1,5 @@
 "use client"
-import SettingsLayout from "../../../components/settings/SettingsLayout";
+import SettingsLayout from "../../_components/SettingsLayout";
 import Link from 'next/link'
 import React from 'react'
 

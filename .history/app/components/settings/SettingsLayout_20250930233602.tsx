@@ -11,7 +11,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
 
   return (
     <div className="p-4">
-      <div className="flex gap-6">
+      <div className="flex  flex-col md:flex-row lg:flex-row gap-4">
         <aside className="w-64 bg-white border rounded p-4 h-fit">
           <div className="mb-6">
             <div className="text-xs font-semibold text-gray-500 mb-2">ACCOUNT SETTINGS</div>

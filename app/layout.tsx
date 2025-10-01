@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Navbar from "./components/Navbar";
+import AppShell from "./components/AppShell";
+import { WarehouseProvider } from "./components/warehouses/WarehouseProvider";
 // import '../styles/globals.css';
 
 
@@ -27,11 +28,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
-        <Navbar />
-        <main>
-          {children}
-        </main>
+      <body suppressHydrationWarning>
+        <WarehouseProvider>
+          <AppShell>
+            {children}
+          </AppShell>
+        </WarehouseProvider>
       </body>
     </html>
   );

@@ -1,6 +1,6 @@
-import SettingsLayout from "../../../components/settings/SettingsLayout";
-import ChannelLogo from "../../../components/settings/ChannelLogo";
-import ChannelConnectForm, { ChannelOption } from "../../../components/settings/ChannelConnectForm";
+import SettingsLayout from "../../_components/SettingsLayout";
+import ChannelLogo from "../../_components/ChannelLogo";
+import ChannelConnectForm, { ChannelOption } from "../../_components/ChannelConnectForm";
 
 const channelRegions: Record<string, ChannelOption[]> = {
   amazon: [
