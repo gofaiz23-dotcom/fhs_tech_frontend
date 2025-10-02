@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AppShell from "./components/AppShell";
 import { WarehouseProvider } from "./components/warehouses/WarehouseProvider";
+import { AuthProvider } from "./lib/auth/context";
 // import '../styles/globals.css';
 
 
@@ -29,11 +30,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body suppressHydrationWarning>
-        <WarehouseProvider>
-          <AppShell>
-            {children}
-          </AppShell>
-        </WarehouseProvider>
+        <AuthProvider>
+          <WarehouseProvider>
+            <AppShell>
+              {children}
+            </AppShell>
+          </WarehouseProvider>
+        </AuthProvider>
       </body>
     </html>
   );

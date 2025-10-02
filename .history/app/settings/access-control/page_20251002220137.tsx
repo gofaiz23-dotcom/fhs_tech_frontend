@@ -101,10 +101,10 @@ export default function AccessControlPage() {
   };
 
   /**
-   * Get username from user object (uses actual username field from API)
+   * Get username from email
    */
-  const getDisplayUsername = (user: DetailedUser) => {
-    return user.username || user.email.split('@')[0];
+  const getUsernameFromEmail = (email: string) => {
+    return email.split('@')[0];
   };
 
   /**
@@ -192,7 +192,7 @@ export default function AccessControlPage() {
                           )}
                         </div>
                         <div>
-                          <div className="font-medium text-gray-800">{getDisplayUsername(user)}</div>
+                          <div className="font-medium text-gray-800">{getUsernameFromEmail(user.email)}</div>
                           <div className="text-xs text-gray-500 flex items-center gap-2">
                             <span className={`inline-block w-2 h-2 rounded-full ${user.role === 'ADMIN' ? 'bg-purple-500' : 'bg-blue-500'}`}></span>
                             {user.role}
@@ -243,7 +243,7 @@ export default function AccessControlPage() {
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
             <div className="bg-white rounded shadow-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-6">
-                <div className="text-lg font-semibold text-gray-800">View Access - {getDisplayUsername(showGrantAccess)}</div>
+                <div className="text-lg font-semibold text-gray-800">View Access - {getUsernameFromEmail(showGrantAccess.email)}</div>
                 <button className="text-gray-400 hover:text-red-500 transition-colors" onClick={() => setShowGrantAccess(null)}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -377,7 +377,7 @@ export default function AccessControlPage() {
                 </button>
               </div>
             </div>
-          </div>
+          )}
         )}
       </div>
     </SettingsLayout>

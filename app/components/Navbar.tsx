@@ -2,26 +2,66 @@
 
 "use client";
 
-import { Settings, ChevronDown, Menu, X } from "lucide-react";
+import { Settings, ChevronDown, Menu, X, User, LogOut } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
+import { useAuth } from "../lib/auth";
+import SideNavigation from "./SideNavigation";
 
 export default function Navbar() {
   const pathname = usePathname();
+  const { state, logout } = useAuth();
   const [mounted, setMounted] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [productsOpen, setProductsOpen] = React.useState(false);
+  const [profileOpen, setProfileOpen] = React.useState(false);
+  const [sideNavOpen, setSideNavOpen] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Close profile dropdown when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileOpen && !(event.target as Element).closest('.profile-dropdown')) {
+        setProfileOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [profileOpen]);
+
   const isActive = (href: string) =>
     mounted && (pathname === href || pathname?.startsWith(href + "/"));
   const linkClass = (href: string) =>
     isActive(href) ? "text-yellow-300 underline" : "hover:underline";
+
+  // Helper functions for user profile
+  const getInitials = (name: string) => {
+    return name.charAt(0).toUpperCase();
+  };
+
+  const getAvatarColor = (name: string) => {
+    const colors = [
+      'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 
+      'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
+    ];
+    const index = name.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setProfileOpen(false);
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   return (
     <nav className=" bg-indigo-600/90 text-white shadow-md w-full">
@@ -74,19 +114,67 @@ export default function Navbar() {
             Reports
           </Link>
         </ul>
-        {/* Right: Settings + User */}
+        {/* Right: User Profile */}
         <div className="hidden md:flex items-center space-x-4">
-          <Link
-            href="/settings/channels"
-            className="hover:text-gray-200 transition"
-          >
-            <Settings size={18} strokeWidth={2} />
-          </Link>
-          <Link href="/login" className="hover:text-gray-200 transition text-sm">Login</Link>
-          {/* <div className="flex items-center bg-purple-800 px-3 py-1 rounded text-sm font-medium cursor-pointer hover:bg-purple-900 transition">
-            ths
-            <ChevronDown size={16} className="ml-1" />
-          </div> */}
+          {state.isAuthenticated && state.user ? (
+            <div className="relative profile-dropdown">
+              <button
+                onClick={() => setProfileOpen(!profileOpen)}
+                className="flex items-center space-x-2 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg transition-colors"
+              >
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm ${getAvatarColor(state.user.username || state.user.email)}`}>
+                  {getInitials(state.user.username || state.user.email)}
+                </div>
+                <span className="text-sm font-medium">{state.user.username}</span>
+                <ChevronDown size={16} className={`transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Profile Dropdown */}
+              {profileOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50 animate-in slide-in-from-top-2 duration-200">
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${getAvatarColor(state.user.username || state.user.email)}`}>
+                        {getInitials(state.user.username || state.user.email)}
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">{state.user.username}</div>
+                        <div className="text-sm text-gray-500">{state.user.email}</div>
+                        <div className="text-xs text-gray-400 flex items-center gap-1">
+                          <div className={`w-2 h-2 rounded-full ${state.user.role === 'ADMIN' ? 'bg-purple-500' : 'bg-blue-500'}`}></div>
+                          {state.user.role}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="py-1">
+                    <button
+                      onClick={() => {
+                        setSideNavOpen(true);
+                        setProfileOpen(false);
+                      }}
+                      className="w-full flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <Settings size={16} className="mr-3 text-gray-400" />
+                      Settings
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut size={16} className="mr-3" />
+                      Sign out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link href="/login" className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-colors text-sm font-medium">
+              Sign In
+            </Link>
+          )}
         </div>
         {/* Mobile Hamburger */}
         <button
@@ -157,22 +245,61 @@ export default function Navbar() {
             Reports
           </Link>
 
-          <div className="flex items-center justify-between pt-4 border-t border-purple-600">
-            <Link
-              href="/settings/channels"
-              className="hover:text-gray-200 transition"
-              onClick={() => setMenuOpen(false)}
-            >
-              <Settings size={18} strokeWidth={2} />
-            </Link>
-            <Link href="/login" className="hover:text-gray-200 transition" onClick={() => setMenuOpen(false)}>Login</Link>
-            <div className="flex items-center bg-purple-900 px-3 py-1 rounded text-sm font-medium cursor-pointer hover:bg-purple-950 transition">
-              ths
-              <ChevronDown size={16} className="ml-1" />
-            </div>
+          {/* Mobile User Profile */}
+          <div className="pt-4 border-t border-purple-600">
+            {state.isAuthenticated && state.user ? (
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${getAvatarColor(state.user.username || state.user.email)}`}>
+                    {getInitials(state.user.username || state.user.email)}
+                  </div>
+                  <div>
+                    <div className="font-medium">{state.user.username}</div>
+                    <div className="text-sm text-gray-300">{state.user.email}</div>
+                    <div className="text-xs text-gray-400 flex items-center gap-1">
+                      <div className={`w-2 h-2 rounded-full ${state.user.role === 'ADMIN' ? 'bg-purple-400' : 'bg-blue-400'}`}></div>
+                      {state.user.role}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => {
+                      setSideNavOpen(true);
+                      setMenuOpen(false);
+                    }}
+                    className="flex items-center text-sm hover:text-gray-200 transition"
+                  >
+                    <Settings size={16} className="mr-2" />
+                    Settings
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setMenuOpen(false);
+                    }}
+                    className="flex items-center text-sm text-red-300 hover:text-red-200 transition"
+                  >
+                    <LogOut size={16} className="mr-2" />
+                    Sign out
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <Link 
+                href="/login" 
+                className="block bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-colors text-sm font-medium text-center"
+                onClick={() => setMenuOpen(false)}
+              >
+                Sign In
+              </Link>
+            )}
           </div>
         </div>
       )}
+      
+      {/* Side Navigation */}
+      <SideNavigation isOpen={sideNavOpen} onClose={() => setSideNavOpen(false)} />
     </nav>
   );
 }
