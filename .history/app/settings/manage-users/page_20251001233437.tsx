@@ -120,33 +120,16 @@ export default function ManageUsersPage() {
                     <span>{u.username}</span>
                   </td>
                   <td className="py-3 px-4">{u.email}</td>
-                  <td className="py-3 px-4">
-                    <div className="space-y-1 text-xs">
-                      {(() => {
-                        const role = u.role ?? 'viewer';
-                        const perms = u.permissions ?? defaultPermissions(role);
-                        const grantedBrands = perms.brands.filter(b => b.enabled).map(b => b.name);
-                        const grantedMarketplaces = perms.marketplaces.filter(m => m.enabled).map(m => m.name);
-                        const grantedShipping = perms.shippingPlatforms.filter(s => s.enabled).map(s => s.name);
-                        
-                        return (
-                          <>
-                            
-                            <div className="flex gap-1 mt-2">
-                              <button title="View Access" aria-label="View Access" onClick={()=> { const role = u.role ?? 'viewer'; const perms = u.permissions ?? defaultPermissions(role); setShowAccessFor({ ...u, role, permissions: perms }); }} className="inline-flex items-center justify-center border rounded p-1 text-xs hover:bg-gray-50">
-                                <Eye size={14} />
-                              </button>
-                              <button title="Edit" aria-label="Edit" onClick={()=> { setIsEditing(u.id); setForm({ username: u.username, email: u.email, password: u.password, role: u.role ?? 'viewer' }); setOpen(true); }} className="inline-flex items-center justify-center border rounded p-1 text-xs hover:bg-gray-50">
-                                <Pencil size={14} />
-                              </button>
-                              <button title="Delete" aria-label="Delete" onClick={()=> setConfirmDelete(u)} className="inline-flex items-center justify-center border rounded p-1 text-xs hover:bg-red-50 text-red-600">
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
+                  <td className="py-3 px-4 text-right space-x-2">
+                    <button title="View Access" aria-label="View Access" onClick={()=> { const role = u.role ?? 'viewer'; const perms = u.permissions ?? defaultPermissions(role); setShowAccessFor({ ...u, role, permissions: perms }); }} className="inline-flex items-center justify-center border rounded p-1.5 text-xs hover:bg-gray-50 align-middle">
+                      <Eye size={16} />
+                    </button>
+                    <button title="Edit" aria-label="Edit" onClick={()=> { setIsEditing(u.id); setForm({ username: u.username, email: u.email, password: u.password, role: u.role ?? 'viewer' }); setOpen(true); }} className="inline-flex items-center justify-center border rounded p-1.5 text-xs hover:bg-gray-50 align-middle">
+                      <Pencil size={16} />
+                    </button>
+                    <button title="Delete" aria-label="Delete" onClick={()=> setConfirmDelete(u)} className="inline-flex items-center justify-center border rounded p-1.5 text-xs hover:bg-red-50 text-red-600 align-middle">
+                      <Trash2 size={16} />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -195,98 +178,77 @@ export default function ManageUsersPage() {
                   </svg>
                 </button>
               </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Simple Apple-like toggle */}
+              {(() => {
+                const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
+                  <button type="button" onClick={() => onChange(!checked)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-green-500' : 'bg-gray-300'}`}>
+                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-1'}`} />
+                  </button>
+                );
+                return null;
+              })()}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <div className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                    Brands
-                  </div>
+                  <div className="font-medium text-gray-800 mb-2">Brands</div>
                   <div className="space-y-2">
-                    {(() => {
-                      const grantedBrands = showAccessFor.permissions.brands.filter(b => b.enabled);
-                      return grantedBrands.length > 0 ? (
-                        grantedBrands.map((b, i) => (
-                          <div key={i} className="text-sm text-gray-700 bg-blue-50 border border-blue-200 rounded px-3 py-2">
-                            <span className="flex items-center gap-2">
-                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              {b.name}
-                            </span>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-sm text-gray-400 italic">No brands granted</div>
-                      );
-                    })()}
+                    {showAccessFor.permissions.brands.map((b, i) => (
+                      <label key={i} className="flex items-center justify-between text-sm text-gray-700 border rounded px-3 py-2">
+                        <span>{b.name}</span>
+                        <button type="button" onClick={()=>{
+                          const next = { ...showAccessFor } as AdminUser;
+                          next.permissions.brands[i] = { ...b, enabled: !b.enabled };
+                          setShowAccessFor({ ...next });
+                          const all = users.map(u => u.id === next.id ? next : u); persist(all);
+                        }} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${b.enabled ? 'bg-green-500' : 'bg-gray-300'}`}>
+                          <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${b.enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                        </button>
+                      </label>
+                    ))}
                   </div>
                 </div>
                 <div>
-                  <div className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                    Marketplaces
-                  </div>
+                  <div className="font-medium text-gray-800 mb-2">Marketplaces</div>
                   <div className="space-y-2">
-                    {(() => {
-                      const grantedMarketplaces = showAccessFor.permissions.marketplaces.filter(m => m.enabled);
-                      return grantedMarketplaces.length > 0 ? (
-                        grantedMarketplaces.map((m, i) => (
-                          <div key={i} className="text-sm text-gray-700 bg-green-50 border border-green-200 rounded px-3 py-2">
-                            <span className="flex items-center gap-2">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              {m.name}
-                            </span>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-sm text-gray-400 italic">No marketplaces granted</div>
-                      );
-                    })()}
+                    {showAccessFor.permissions.marketplaces.map((m, i) => (
+                      <label key={i} className="flex items-center justify-between text-sm text-gray-700 border rounded px-3 py-2">
+                        <span>{m.name}</span>
+                        <button type="button" onClick={()=>{
+                          const next = { ...showAccessFor } as AdminUser;
+                          next.permissions.marketplaces[i] = { ...m, enabled: !m.enabled };
+                          setShowAccessFor({ ...next });
+                          const all = users.map(u => u.id === next.id ? next : u); persist(all);
+                        }} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${m.enabled ? 'bg-green-500' : 'bg-gray-300'}`}>
+                          <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${m.enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                        </button>
+                      </label>
+                    ))}
                   </div>
                 </div>
                 <div>
-                  <div className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                    <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                    Shipping Platforms
-                  </div>
+                  <div className="font-medium text-gray-800 mb-2">Shipping Platforms</div>
                   <div className="space-y-2">
-                    {(() => {
-                      const grantedShipping = showAccessFor.permissions.shippingPlatforms.filter(s => s.enabled);
-                      return grantedShipping.length > 0 ? (
-                        grantedShipping.map((s, i) => (
-                          <div key={i} className="text-sm text-gray-700 bg-purple-50 border border-purple-200 rounded px-3 py-2">
-                            <span className="flex items-center gap-2">
-                              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                              {s.name}
-                            </span>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-sm text-gray-400 italic">No shipping platforms granted</div>
-                      );
-                    })()}
+                    {showAccessFor.permissions.shippingPlatforms.map((s, i) => (
+                      <label key={i} className="flex items-center justify-between text-sm text-gray-700 border rounded px-3 py-2">
+                        <span>{s.name}</span>
+                        <button type="button" onClick={()=>{
+                          const next = { ...showAccessFor } as AdminUser;
+                          next.permissions.shippingPlatforms[i] = { ...s, enabled: !s.enabled };
+                          setShowAccessFor({ ...next });
+                          const all = users.map(u => u.id === next.id ? next : u); persist(all);
+                        }} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${s.enabled ? 'bg-green-500' : 'bg-gray-300'}`}>
+                          <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${s.enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                        </button>
+                      </label>
+                    ))}
                   </div>
                 </div>
               </div>
-              
-              {(() => {
-                const totalGranted = 
-                  showAccessFor.permissions.brands.filter(b => b.enabled).length +
-                  showAccessFor.permissions.marketplaces.filter(m => m.enabled).length +
-                  showAccessFor.permissions.shippingPlatforms.filter(s => s.enabled).length;
-                
-                return totalGranted === 0 && (
-                  <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded text-center">
-                    <div className="text-gray-500 text-sm">This user has no access permissions granted</div>
-                  </div>
-                );
-              })()}
-              
               <div className="flex justify-end mt-6">
                 <button 
                   onClick={() => setShowAccessFor(null)}
-                  className="bg-gray-600 hover:bg-gray-700 text-white text-sm px-4 py-2 rounded"
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded"
                 >
-                  Close
+                  Save
                 </button>
               </div>
             </div>

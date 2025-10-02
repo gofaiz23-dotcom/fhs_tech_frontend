@@ -16,21 +16,12 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-      {/* Video Background */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="absolute inset-0 w-full h-full object-cover mute  z-0"
-      >
-        <source src="/login-bg.mp4" type="video/mp4" />
-        {/* Fallback for browsers that don't support video */}
-        Your browser does not support the video tag.
-      </video>
-      <div className="absolute inset-0 bg-black/40 z-10" />
-      <div className="relative w-full max-w-md mx-auto p-6 z-20">
+    <div
+      className="min-h-screen bg-cover bg-center flex items-center justify-center relative"
+      style={{ backgroundImage: "url('/login_bg_vid.mp4')" }}
+    >
+      <div className="absolute inset-0 bg-black/40" />
+      <div className="relative w-full max-w-md mx-auto p-6">
         <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-xl shadow-xl p-8">
           <div className="flex items-center gap-3 mb-6">
             <Image src="/fhs-tech-logo.png" alt="FHS Tech" width={120} height={120} />

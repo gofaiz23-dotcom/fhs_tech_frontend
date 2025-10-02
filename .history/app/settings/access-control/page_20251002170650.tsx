@@ -1,7 +1,7 @@
 "use client";
 import SettingsLayout from "../_components/SettingsLayout";
 import React from "react";
-import { Settings } from "lucide-react";
+import { Grid3X3, List, Settings } from "lucide-react";
 
 type PermissionItem = { name: string; enabled: boolean };
 type AdminUser = {
@@ -20,6 +20,7 @@ type AdminUser = {
 
 export default function AccessControlPage() {
   const [users, setUsers] = React.useState<AdminUser[]>([]);
+  const [viewMode, setViewMode] = React.useState<'tile' | 'list'>('tile');
   const [showGrantAccess, setShowGrantAccess] = React.useState<AdminUser | null>(null);
   const [showPermissions, setShowPermissions] = React.useState<{ user: AdminUser; type: 'brands' | 'marketplaces' | 'shippingPlatforms' } | null>(null);
 
@@ -97,9 +98,47 @@ export default function AccessControlPage() {
   return (
     <SettingsLayout>
       <div className="space-y-6">
-        <h2 className="text-xl font-semibold text-gray-800">Access Control</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-gray-800">Access Control</h2>
+          <button
+            onClick={() => setViewMode(viewMode === 'list' ? 'tile' : 'list')}
+            className="flex items-center gap-2 px-3 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+            title={`Switch to ${viewMode === 'list' ? 'tile' : 'list'} view`}
+          >
+            {viewMode === 'tile' ? <List size={18} /> : <Grid3X3 size={18} />}
+            <span className="text-sm">{viewMode === 'tile' ? 'List View' : 'Tile View'}</span>
+          </button>
+        </div>
 
-        <div className="bg-white border rounded-lg overflow-hidden">
+        {viewMode === 'tile' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {users.map(user => (
+            <div key={user.id} className="bg-white border rounded-lg p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <span className={`h-10 w-10 rounded-full ${user.avatar}`}></span>
+                <div>
+                  <div className="font-medium text-gray-800">{user.username}</div>
+                  <div className="text-sm text-gray-600">{user.email}</div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowGrantAccess(user)}
+                className="w-full bg-blue-50 hover:bg-blue-100 text-blue-800 text-sm px-4 py-3 rounded border border-blue-200 transition-colors flex items-center justify-center gap-2"
+              >
+                <Settings size={16} />
+                Grant Access
+              </button>
+            </div>
+          ))}
+          {users.length === 0 && (
+            <div className="col-span-full text-center py-8 text-gray-500">
+              No users found. Create users in Manage Users first.
+            </div>
+          )}
+          </div>
+        ) : (
+          <div className="bg-white border rounded-lg overflow-hidden">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-600 border-b bg-gray-50">
@@ -157,7 +196,8 @@ export default function AccessControlPage() {
                 )}
               </tbody>
             </table>
-        </div>
+          </div>
+        )}
 
         {showGrantAccess && (
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">

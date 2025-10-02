@@ -25,7 +25,7 @@ export default function LoginPage() {
         playsInline
         className="absolute inset-0 w-full h-full object-cover mute  z-0"
       >
-        <source src="/login-bg.mp4" type="video/mp4" />
+        <source src="/login_bg.mp4" type="video/mp4" />
         {/* Fallback for browsers that don't support video */}
         Your browser does not support the video tag.
       </video>
