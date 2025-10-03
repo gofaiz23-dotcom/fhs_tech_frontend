@@ -39,6 +39,7 @@ export default function EndpointDiscovery() {
           statusText: response.statusText,
           success: response.ok,
           headers: Object.fromEntries(response.headers.entries()),
+          data: null as any,
         };
 
         if (response.ok) {
