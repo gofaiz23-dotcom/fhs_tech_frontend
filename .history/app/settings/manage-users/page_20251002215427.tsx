@@ -59,17 +59,11 @@ export default function ManageUsersPage() {
    * Load users from API
    */
   const loadUsers = React.useCallback(async () => {
-    if (!authState.accessToken) {
-      setError('No access token available');
-      setIsLoading(false);
-      return;
-    }
-
     try {
       setIsLoading(true);
       setError(null);
       
-      const response = await AdminService.getAllUsers(authState.accessToken);
+      const response = await AdminService.getAllUsers();
       setUsers(response.users);
     } catch (error: any) {
       console.error('Failed to load users:', error);
@@ -82,7 +76,7 @@ export default function ManageUsersPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [authState.accessToken, logout]);
+  }, [logout]);
 
   // Load users on component mount
   React.useEffect(() => {
@@ -105,27 +99,9 @@ export default function ManageUsersPage() {
         // Handle updates via separate functions
         await handleUpdateUser();
       } else {
-        // Validate required fields for new user
-        if (!form.username.trim()) {
-          setError('Username is required');
-          setIsSubmitting(false);
-          return;
-        }
-        if (!form.email.trim()) {
-          setError('Email is required');
-          setIsSubmitting(false);
-          return;
-        }
-        if (!form.password.trim()) {
-          setError('Password is required');
-          setIsSubmitting(false);
-          return;
-        }
-        
         // Register new user
         await AuthService.register({
-          username: form.username.trim(),
-          email: form.email.trim(),
+          email: form.email,
           password: form.password,
           role: form.role,
         }, authState.accessToken || undefined);
@@ -149,23 +125,23 @@ export default function ManageUsersPage() {
    * Handle user updates
    */
   const handleUpdateUser = async () => {
-    if (!isEditing || !authState.accessToken) return;
+    if (!isEditing) return;
 
     try {
       // Update email if changed
       const currentUser = users.find(u => u.id === isEditing);
       if (currentUser && currentUser.email !== form.email) {
-        await AdminService.updateUserEmail(isEditing, form.email, authState.accessToken);
+        await AdminService.updateUserEmail(isEditing, form.email);
       }
 
       // Update password if provided
       if (form.password && form.password !== '••••••••') {
-        await AdminService.updateUserPassword(isEditing, form.password, authState.accessToken);
+        await AdminService.updateUserPassword(isEditing, form.password);
       }
 
       // Update role if changed
       if (currentUser && currentUser.role !== form.role) {
-        await AdminService.updateUserRole(isEditing, form.role, authState.accessToken);
+        await AdminService.updateUserRole(isEditing, form.role);
       }
 
       // Reload users to get updated data
@@ -199,10 +175,10 @@ export default function ManageUsersPage() {
   };
 
   /**
-   * Get username from user object (uses actual username field from API)
+   * Get username from email
    */
-  const getDisplayUsername = (user: DetailedUser) => {
-    return user.username || user.email.split('@')[0];
+  const getUsernameFromEmail = (email: string) => {
+    return email.split('@')[0];
   };
 
   /**
@@ -295,7 +271,7 @@ export default function ManageUsersPage() {
                       )}
                     </div>
                     <div>
-                      <div className="font-medium">{getDisplayUsername(user)}</div>
+                      <div className="font-medium">{getUsernameFromEmail(user.email)}</div>
                       <div className="text-xs text-gray-500 flex items-center gap-2">
                         <span className={`inline-block w-2 h-2 rounded-full ${user.role === 'ADMIN' ? 'bg-purple-500' : 'bg-blue-500'}`}></span>
                         {user.role}
@@ -356,7 +332,7 @@ export default function ManageUsersPage() {
                                 onClick={() => { 
                                   setIsEditing(user.id); 
                                   setForm({ 
-                                    username: getDisplayUsername(user), 
+                                    username: getUsernameFromEmail(user.email), 
                                     email: user.email, 
                                     password: '••••••••', 
                                     role: user.role 
@@ -407,18 +383,14 @@ export default function ManageUsersPage() {
               )}
               
               <div>
-                <label className="text-xs text-gray-600">Username {!isEditing && '*'}</label>
+                <label className="text-xs text-gray-600">Username (read-only)</label>
                 <input 
                   value={form.username} 
                   onChange={(e)=>setForm({...form, username: e.target.value})} 
-                  className={`mt-1 w-full border rounded px-3 py-2 text-sm ${isEditing ? 'bg-gray-50' : 'bg-white'}`}
-                  placeholder={isEditing ? "Username cannot be changed" : "Enter username"}
-                  disabled={!!isEditing}
-                  required={!isEditing}
+                  className="mt-1 w-full border rounded px-3 py-2 text-sm bg-gray-50" 
+                  placeholder="Will be derived from email"
+                  disabled
                 />
-                {!isEditing && (
-                  <div className="text-xs text-gray-500 mt-1">Choose a unique username for the user</div>
-                )}
               </div>
               <div>
                 <label className="text-xs text-gray-600">Email</label>
@@ -426,7 +398,7 @@ export default function ManageUsersPage() {
                   type="email" 
                   value={form.email} 
                   onChange={(e)=>{
-                    setForm({...form, email: e.target.value});
+                    setForm({...form, email: e.target.value, username: getUsernameFromEmail(e.target.value)});
                   }} 
                   className="mt-1 w-full border rounded px-3 py-2 text-sm" 
                   placeholder="user@company.com"
@@ -495,7 +467,7 @@ export default function ManageUsersPage() {
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
             <div className="bg-white rounded shadow-lg p-6 w-full max-w-2xl">
               <div className="flex items-center justify-between mb-4">
-                <div className="text-lg font-semibold text-gray-800">User Access - {getDisplayUsername(showAccessFor)}</div>
+                <div className="text-lg font-semibold text-gray-800">User Access - {showAccessFor.username}</div>
                 <button className="text-gray-400 hover:text-red-500 transition-colors" onClick={()=>setShowAccessFor(null)}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -663,7 +635,7 @@ export default function ManageUsersPage() {
             <div className="bg-white rounded shadow-lg p-6 w-full max-w-md">
               <div className="text-lg font-semibold text-gray-800 mb-2">Delete User</div>
               <div className="text-gray-600 mb-4">
-                Are you sure you want to delete user "{getDisplayUsername(confirmDelete)}"? 
+                Are you sure you want to delete user "{getUsernameFromEmail(confirmDelete.email)}"? 
                 <div className="text-sm text-red-600 mt-2">
                   Note: Delete functionality is not yet available in the current API.
                 </div>
