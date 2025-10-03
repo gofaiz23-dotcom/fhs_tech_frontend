@@ -86,10 +86,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('🔑 Auth: Token validation result:', { hasToken: !!token });
         
         if (!token) {
-          // Token is invalid, clear auth state
-          console.log('❌ Auth: Invalid token, logging out');
-          logoutStore();
-          return;
+          // Token is invalid, but don't immediately logout - try to get profile first
+          console.log('⚠️ Auth: Token validation failed, trying to get profile with current token');
+          try {
+            const profileResponse = await AuthService.getProfile(accessToken);
+            console.log('✅ Auth: Profile fetched with current token');
+            updateAuthState({
+              user: profileResponse.user,
+              accessToken: accessToken,
+            });
+            return;
+          } catch (profileError) {
+            console.log('❌ Auth: Profile fetch failed, logging out');
+            logoutStore();
+            return;
+          }
         }
 
         // Get user profile with the valid token
@@ -134,13 +145,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timeout);
   }, [isLoading, logoutStore]);
 
-  // Automatic token refresh every 13 minutes
+  // Automatic token refresh every 10 minutes (before 15-minute expiration)
   useEffect(() => {
     let refreshInterval: NodeJS.Timeout | null = null;
 
     if (isAuthenticated && accessToken) {
       refreshInterval = setInterval(async () => {
         try {
+          console.log('🔄 Auto-refreshing token...');
           const refreshResponse = await AuthService.refreshToken();
           
           // Update the token in the store
@@ -148,12 +160,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             user: user!,
             accessToken: refreshResponse.accessToken,
           });
+          console.log('✅ Token refreshed successfully');
         } catch (error) {
-          console.error('Auto token refresh failed:', error);
-          // If refresh fails, logout the user
-          logoutStore();
+          console.error('❌ Auto token refresh failed:', error);
+          // Don't immediately logout on refresh failure - let the user continue working
+          // The token will be validated on the next API call
+          console.log('⚠️ Token refresh failed, but keeping user logged in');
         }
-      }, 13 * 60 * 1000); // 13 minutes in milliseconds
+      }, 10 * 60 * 1000); // 10 minutes in milliseconds (before 15-minute expiration)
     }
 
     // Cleanup interval on unmount or when authentication state changes

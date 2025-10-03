@@ -1,10 +1,13 @@
 "use client";
 import SettingsLayout from "../_components/SettingsLayout";
 import React from "react";
-import { Pencil, Trash2, Eye, AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import { Pencil, Trash2, Eye, AlertCircle, Loader2, RefreshCw, Search } from "lucide-react";
 import { AdminService, AdminUtils } from "../../lib/admin";
 import { useAuth, AuthService } from "../../lib/auth";
 import type { DetailedUser } from "../../lib/admin/types";
+import AppleToggle from "../../components/AppleToggle";
+import { AccessControlService, type Brand, type Marketplace, type ShippingPlatform } from "../../lib/access-control";
+// import { usePermissionsStore } from "../../lib/stores/permissionsStore"; // No longer needed
 
 type PermissionItem = { name: string; enabled: boolean };
 type AdminUser = {
@@ -36,6 +39,8 @@ function randomAvatar() {
 export default function ManageUsersPage() {
   // Authentication context
   const { state: authState, logout } = useAuth();
+  
+  // Permissions store (no longer needed - using API data directly)
 
   // API data state
   const [users, setUsers] = React.useState<DetailedUser[]>([]);
@@ -55,6 +60,49 @@ export default function ManageUsersPage() {
   const [confirmDelete, setConfirmDelete] = React.useState<DetailedUser | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
+  // Toggle states for View Access modal
+  const [brandAccess, setBrandAccess] = React.useState<Record<number, boolean>>({});
+  const [marketplaceAccess, setMarketplaceAccess] = React.useState<Record<number, boolean>>({});
+  const [shippingAccess, setShippingAccess] = React.useState<Record<number, boolean>>({});
+  const [isToggling, setIsToggling] = React.useState<Record<string, boolean>>({});
+
+  // Available items from API
+  const [availableBrands, setAvailableBrands] = React.useState<Brand[]>([]);
+  const [availableMarketplaces, setAvailableMarketplaces] = React.useState<Marketplace[]>([]);
+  const [availableShipping, setAvailableShipping] = React.useState<ShippingPlatform[]>([]);
+  const [isLoadingAvailableItems, setIsLoadingAvailableItems] = React.useState(false);
+
+  // Search state
+  const [searchTerm, setSearchTerm] = React.useState('');
+
+  // Mock data removed - now using actual API data
+
+  // Initialize toggle states when user is selected
+  React.useEffect(() => {
+    if (showAccessFor) {
+      // Initialize brand access from API data
+      const brandStates: Record<number, boolean> = {};
+      showAccessFor.brandAccess?.forEach(brand => {
+        brandStates[brand.id] = brand.isActive;
+      });
+      setBrandAccess(brandStates);
+
+      // Initialize marketplace access from API data
+      const marketplaceStates: Record<number, boolean> = {};
+      showAccessFor.marketplaceAccess?.forEach(marketplace => {
+        marketplaceStates[marketplace.id] = marketplace.isActive;
+      });
+      setMarketplaceAccess(marketplaceStates);
+
+      // Initialize shipping access from API data
+      const shippingStates: Record<number, boolean> = {};
+      showAccessFor.shippingAccess?.forEach(shipping => {
+        shippingStates[shipping.id] = shipping.isActive;
+      });
+      setShippingAccess(shippingStates);
+    }
+  }, [showAccessFor]);
+
   /**
    * Load users from API
    */
@@ -69,7 +117,7 @@ export default function ManageUsersPage() {
       setIsLoading(true);
       setError(null);
       
-      const response = await AdminService.getAllUsers(authState.accessToken);
+      const response = await AdminService.getAllUsersWithAccess(authState.accessToken);
       setUsers(response.users);
     } catch (error: any) {
       console.error('Failed to load users:', error);
@@ -84,10 +132,39 @@ export default function ManageUsersPage() {
     }
   }, [authState.accessToken, logout]);
 
+  // Load available items from API
+  const loadAvailableItems = React.useCallback(async () => {
+    if (!authState.accessToken) return;
+
+    try {
+      setIsLoadingAvailableItems(true);
+      setError(null);
+      
+      const [brandsResponse, marketplacesResponse, shippingResponse] = await Promise.all([
+        AccessControlService.getBrands(authState.accessToken),
+        AccessControlService.getMarketplaces(authState.accessToken),
+        AccessControlService.getShippingPlatforms(authState.accessToken)
+      ]);
+      
+      setAvailableBrands(brandsResponse.brands || []);
+      setAvailableMarketplaces(marketplacesResponse.marketplaces || []);
+      setAvailableShipping(shippingResponse.shippingCompanies || []);
+    } catch (error: any) {
+      console.error('Failed to load available items:', error);
+      setError(error.message || 'Failed to load available items');
+    } finally {
+      setIsLoadingAvailableItems(false);
+    }
+  }, [authState.accessToken]);
+
   // Load users on component mount
   React.useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    // Only load users if authentication is complete and we have a token
+    if (authState.isAuthenticated && authState.accessToken && !authState.isLoading) {
+      loadUsers();
+      loadAvailableItems();
+    }
+  }, [loadUsers, loadAvailableItems, authState.isAuthenticated, authState.accessToken, authState.isLoading]);
 
   /**
    * Handle user registration (only for creating new users)
@@ -152,8 +229,16 @@ export default function ManageUsersPage() {
     if (!isEditing || !authState.accessToken) return;
 
     try {
-      // Update email if changed
       const currentUser = users.find(u => u.id === isEditing);
+      
+      // Update username if changed
+      if (currentUser && getDisplayUsername(currentUser) !== form.username) {
+        // Note: Username update would need a separate API endpoint
+        console.log('Username update requested:', form.username);
+        // await AdminService.updateUsername(isEditing, form.username, authState.accessToken);
+      }
+
+      // Update email if changed
       if (currentUser && currentUser.email !== form.email) {
         await AdminService.updateUserEmail(isEditing, form.email, authState.accessToken);
       }
@@ -218,6 +303,123 @@ export default function ManageUsersPage() {
     return gradients[userId % gradients.length];
   };
 
+  /**
+   * Toggle brand access for a user
+   */
+  const handleToggleBrandAccess = async (userId: number, brandId: number) => {
+    if (!authState.accessToken || !showAccessFor) return;
+    
+    const toggleKey = `brand-${userId}-${brandId}`;
+    setIsToggling(prev => ({ ...prev, [toggleKey]: true }));
+    
+    try {
+      console.log('Calling toggleBrandAccess...');
+      // @ts-ignore - Temporary workaround for TypeScript issue
+      await AdminService.toggleBrandAccess(userId, brandId, authState.accessToken);
+      
+      // Update local state
+      setBrandAccess(prev => ({
+        ...prev,
+        [brandId]: !prev[brandId]
+      }));
+      
+      // Reload users to get updated data
+      await loadUsers();
+    } catch (error: any) {
+      console.error('Failed to toggle brand access:', error);
+      setError(error.message || 'Failed to toggle brand access');
+    } finally {
+      setIsToggling(prev => ({ ...prev, [toggleKey]: false }));
+    }
+  };
+
+  /**
+   * Toggle marketplace access for a user
+   */
+  const handleToggleMarketplaceAccess = async (userId: number, marketplaceId: number) => {
+    if (!authState.accessToken || !showAccessFor) return;
+    
+    const toggleKey = `marketplace-${userId}-${marketplaceId}`;
+    setIsToggling(prev => ({ ...prev, [toggleKey]: true }));
+    
+    try {
+      // @ts-ignore - Temporary workaround for TypeScript issue
+      await AdminService.toggleMarketplaceAccess(userId, marketplaceId, authState.accessToken);
+      
+      // Update local state
+      setMarketplaceAccess(prev => ({
+        ...prev,
+        [marketplaceId]: !prev[marketplaceId]
+      }));
+      
+      // Reload users to get updated data
+      await loadUsers();
+    } catch (error: any) {
+      console.error('Failed to toggle marketplace access:', error);
+      setError(error.message || 'Failed to toggle marketplace access');
+    } finally {
+      setIsToggling(prev => ({ ...prev, [toggleKey]: false }));
+    }
+  };
+
+  /**
+   * Toggle shipping access for a user
+   */
+  const handleToggleShippingAccess = async (userId: number, shippingId: number) => {
+    if (!authState.accessToken || !showAccessFor) return;
+    
+    const toggleKey = `shipping-${userId}-${shippingId}`;
+    setIsToggling(prev => ({ ...prev, [toggleKey]: true }));
+    
+    try {
+      // @ts-ignore - Temporary workaround for TypeScript issue
+      await AdminService.toggleShippingAccess(userId, shippingId, authState.accessToken);
+      
+      // Update local state
+      setShippingAccess(prev => ({
+        ...prev,
+        [shippingId]: !prev[shippingId]
+      }));
+      
+      // Reload users to get updated data
+      await loadUsers();
+    } catch (error: any) {
+      console.error('Failed to toggle shipping access:', error);
+      setError(error.message || 'Failed to toggle shipping access');
+    } finally {
+      setIsToggling(prev => ({ ...prev, [toggleKey]: false }));
+    }
+  };
+
+  // Helper functions to filter user access based on available items
+  const getFilteredBrandAccess = (user: DetailedUser) => {
+    if (!user.brandAccess || !availableBrands.length) return [];
+    return user.brandAccess.filter(brand => 
+      availableBrands.some(available => available.id === brand.id)
+    );
+  };
+
+  const getFilteredMarketplaceAccess = (user: DetailedUser) => {
+    if (!user.marketplaceAccess || !availableMarketplaces.length) return [];
+    return user.marketplaceAccess.filter(marketplace => 
+      availableMarketplaces.some(available => available.id === marketplace.id)
+    );
+  };
+
+  const getFilteredShippingAccess = (user: DetailedUser) => {
+    if (!user.shippingAccess || !availableShipping.length) return [];
+    return user.shippingAccess.filter(shipping => 
+      availableShipping.some(available => available.id === shipping.id)
+    );
+  };
+
+  // Filter users based on search term
+  const filteredUsers = users.filter(user =>
+    getDisplayUsername(user).toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.role.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <SettingsLayout>
       <div className="space-y-6">
@@ -247,6 +449,20 @@ export default function ManageUsersPage() {
             >
               Create New User
             </button>
+          </div>
+        </div>
+
+        {/* Search Bar */}
+        <div className="flex items-center gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search users..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
           </div>
         </div>
 
@@ -284,7 +500,7 @@ export default function ManageUsersPage() {
               </tr>
             </thead>
             <tbody>
-              {users.map(user => (
+              {filteredUsers.map(user => (
                 <tr key={user.id} className="border-b last:border-b-0">
                   <td className="py-3 px-4 flex items-center gap-3">
                     <div className="relative">
@@ -311,82 +527,54 @@ export default function ManageUsersPage() {
                     )}
                   </td>
                   <td className="py-3 px-4">
-                    <div className="space-y-1 text-xs">
-                      {(() => {
-                        const grantedBrands = user.brandAccess?.filter(b => b.isActive).map(b => b.name) || [];
-                        const grantedMarketplaces = user.marketplaceAccess?.filter(m => m.isActive).map(m => m.name) || [];
-                        const grantedShipping = user.shippingAccess?.filter(s => s.isActive).map(s => s.name) || [];
-                        
-                        return (
-                          <>
-                            {grantedBrands.length > 0 && (
-                              <div className="flex items-center gap-1">
-                                <span className="font-medium text-blue-600">Brands:</span>
-                                <span className="text-gray-600">{grantedBrands.join(', ')}</span>
-                              </div>
-                            )}
-                            {grantedMarketplaces.length > 0 && (
-                              <div className="flex items-center gap-1">
-                                <span className="font-medium text-green-600">Marketplaces:</span>
-                                <span className="text-gray-600">{grantedMarketplaces.join(', ')}</span>
-                              </div>
-                            )}
-                            {grantedShipping.length > 0 && (
-                              <div className="flex items-center gap-1">
-                                <span className="font-medium text-purple-600">Shipping:</span>
-                                <span className="text-gray-600">{grantedShipping.join(', ')}</span>
-                              </div>
-                            )}
-                            {grantedBrands.length === 0 && grantedMarketplaces.length === 0 && grantedShipping.length === 0 && (
-                              <span className="text-gray-400">No access granted</span>
-                            )}
-                            
-                            <div className="flex gap-1 mt-2">
-                              <button 
-                                title="View Access" 
-                                aria-label="View Access" 
-                                onClick={() => setShowAccessFor(user)} 
-                                className="inline-flex items-center justify-center border rounded p-1 text-xs hover:bg-gray-50"
-                              >
-                                <Eye size={14} />
-                              </button>
-                              <button 
-                                title="Edit" 
-                                aria-label="Edit" 
-                                onClick={() => { 
-                                  setIsEditing(user.id); 
-                                  setForm({ 
-                                    username: getDisplayUsername(user), 
-                                    email: user.email, 
-                                    password: '••••••••', 
-                                    role: user.role 
-                                  }); 
-                                  setOpen(true); 
-                                }} 
-                                className="inline-flex items-center justify-center border rounded p-1 text-xs hover:bg-gray-50"
-                              >
-                                <Pencil size={14} />
-                              </button>
-                              <button 
-                                title="Delete" 
-                                aria-label="Delete" 
-                                onClick={() => setConfirmDelete(user)} 
-                                className="inline-flex items-center justify-center border rounded p-1 text-xs hover:bg-red-50 text-red-600"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </>
-                        );
-                      })()}
+                    <div className="flex gap-1">
+                      <button 
+                        title="View Access" 
+                        aria-label="View Access" 
+                        onClick={() => setShowAccessFor(user)} 
+                        className="inline-flex items-center justify-center border rounded p-1 text-xs hover:bg-gray-50"
+                      >
+                        <Eye size={14} />
+                      </button>
+                      <button 
+                        title="Edit" 
+                        aria-label="Edit" 
+                        onClick={() => { 
+                          setIsEditing(user.id); 
+                          setForm({ 
+                            username: getDisplayUsername(user), 
+                            email: user.email, 
+                            password: '••••••••', 
+                            role: user.role 
+                          }); 
+                          setOpen(true); 
+                        }} 
+                        className="inline-flex items-center justify-center border rounded p-1 text-xs hover:bg-gray-50"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      
+                      <button 
+                        title="Delete" 
+                        aria-label="Delete" 
+                        onClick={() => setConfirmDelete(user)} 
+                        className="inline-flex items-center justify-center border rounded p-1 text-xs hover:bg-red-50 text-red-600"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </td>
                 </tr>
               ))}
-              {users.length === 0 && (
+              {filteredUsers.length === 0 && (
                 <tr>
                   <td className="py-8 px-4 text-center text-gray-600" colSpan={3}>
-                    No users found. {authState.user?.role === 'ADMIN' ? 'Click Create New User to get started.' : 'Contact your administrator to add users.'}
+                    {searchTerm 
+                      ? 'No users match your search criteria.' 
+                      : authState.user?.role === 'ADMIN' 
+                        ? 'Click Create New User to get started.' 
+                        : 'Contact your administrator to add users.'
+                    }
                   </td>
                 </tr>
               )}
@@ -411,14 +599,12 @@ export default function ManageUsersPage() {
                 <input 
                   value={form.username} 
                   onChange={(e)=>setForm({...form, username: e.target.value})} 
-                  className={`mt-1 w-full border rounded px-3 py-2 text-sm ${isEditing ? 'bg-gray-50' : 'bg-white'}`}
-                  placeholder={isEditing ? "Username cannot be changed" : "Enter username"}
-                  disabled={!!isEditing}
-                  required={!isEditing}
+                  className="mt-1 w-full border rounded px-3 py-2 text-sm bg-white"
+                  placeholder="Enter username"
+                  required
+                  disabled={isSubmitting}
                 />
-                {!isEditing && (
-                  <div className="text-xs text-gray-500 mt-1">Choose a unique username for the user</div>
-                )}
+                <div className="text-xs text-gray-500 mt-1">Choose a unique username for the user</div>
               </div>
               <div>
                 <label className="text-xs text-gray-600">Email</label>
@@ -493,9 +679,9 @@ export default function ManageUsersPage() {
 
         {showAccessFor && (
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-            <div className="bg-white rounded shadow-lg p-6 w-full max-w-2xl">
-              <div className="flex items-center justify-between mb-4">
-                <div className="text-lg font-semibold text-gray-800">User Access - {getDisplayUsername(showAccessFor)}</div>
+            <div className="bg-white rounded shadow-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <div className="text-lg font-semibold text-gray-800">View Access - {getDisplayUsername(showAccessFor)}</div>
                 <button className="text-gray-400 hover:text-red-500 transition-colors" onClick={()=>setShowAccessFor(null)}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -504,148 +690,161 @@ export default function ManageUsersPage() {
                 </button>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <div className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                    Brands
-                  </div>
-                  <div className="space-y-2">
-                    {(() => {
-                      const grantedBrands = showAccessFor.brandAccess?.filter(b => b.isActive) || [];
-                      return grantedBrands.length > 0 ? (
-                        grantedBrands.map((brand, i) => (
-                          <div key={i} className="text-sm text-gray-700 bg-blue-50 border border-blue-200 rounded px-3 py-2">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              <div>
-                                <div className="font-medium">{brand.name}</div>
-                                {brand.description && (
-                                  <div className="text-xs text-gray-500">{brand.description}</div>
-                                )}
-                                <div className="text-xs text-gray-500">
-                                  Granted: {AdminUtils.formatRelativeTime(brand.grantedAt)}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-sm text-gray-400 italic">No brands granted</div>
-                      );
-                    })()}
-                  </div>
-                </div>
-                <div>
-                  <div className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                    Marketplaces
-                  </div>
-                  <div className="space-y-2">
-                    {(() => {
-                      const grantedMarketplaces = showAccessFor.marketplaceAccess?.filter(m => m.isActive) || [];
-                      return grantedMarketplaces.length > 0 ? (
-                        grantedMarketplaces.map((marketplace, i) => (
-                          <div key={i} className="text-sm text-gray-700 bg-green-50 border border-green-200 rounded px-3 py-2">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <div>
-                                <div className="font-medium">{marketplace.name}</div>
-                                {marketplace.description && (
-                                  <div className="text-xs text-gray-500">{marketplace.description}</div>
-                                )}
-                                <div className="text-xs text-gray-500">
-                                  Granted: {AdminUtils.formatRelativeTime(marketplace.grantedAt)}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-sm text-gray-400 italic">No marketplaces granted</div>
-                      );
-                    })()}
-                  </div>
-                </div>
-                <div>
-                  <div className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                    <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                    Shipping Platforms
-                  </div>
-                  <div className="space-y-2">
-                    {(() => {
-                      const grantedShipping = showAccessFor.shippingAccess?.filter(s => s.isActive) || [];
-                      return grantedShipping.length > 0 ? (
-                        grantedShipping.map((shipping, i) => (
-                          <div key={i} className="text-sm text-gray-700 bg-purple-50 border border-purple-200 rounded px-3 py-2">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                              <div>
-                                <div className="font-medium">{shipping.name}</div>
-                                {shipping.description && (
-                                  <div className="text-xs text-gray-500">{shipping.description}</div>
-                                )}
-                                <div className="text-xs text-gray-500">
-                                  Granted: {AdminUtils.formatRelativeTime(shipping.grantedAt)}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-sm text-gray-400 italic">No shipping platforms granted</div>
-                      );
-                    })()}
-                  </div>
+              {/* Read-only notice */}
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="text-blue-800 text-sm">
+                  <strong>Read-only view:</strong> This shows the current access permissions for this user. 
+                  To modify permissions, use the Access Control page.
                 </div>
               </div>
               
-              {/* Login Statistics */}
-              {showAccessFor.loginStats && (
-                <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded">
-                  <h4 className="font-medium text-gray-800 mb-3">Login Activity</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <div className="text-gray-600">Total Sessions</div>
-                      <div className="font-medium">{showAccessFor.loginStats.totalSessions}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Total Hours</div>
-                      <div className="font-medium">{showAccessFor.loginStats.totalLoginHours.toFixed(1)}h</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Last Login</div>
-                      <div className="font-medium">
-                        {showAccessFor.loginStats.lastLogin 
-                          ? AdminUtils.formatRelativeTime(showAccessFor.loginStats.lastLogin)
-                          : 'Never'
-                        }
+              {/* Show all access categories with toggle switches */}
+              <div className="space-y-6">
+                {/* Loading state for available items */}
+                {isLoadingAvailableItems && (
+                  <div className="text-center py-4">
+                    <Loader2 size={24} className="animate-spin mx-auto mb-2 text-blue-600" />
+                    <div className="text-gray-600">Loading available items...</div>
+                  </div>
+                )}
+
+                {/* Brands Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
+                    <h3 className="text-lg font-semibold text-gray-800">Brands</h3>
+                    <span className="text-sm text-gray-500">({getFilteredBrandAccess(showAccessFor).length} available)</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {getFilteredBrandAccess(showAccessFor).map((brand) => (
+                      <div key={brand.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{brand.name}</div>
+                          {brand.description && (
+                            <div className="text-sm text-gray-500">{brand.description}</div>
+                          )}
+                          <div className="text-xs text-gray-500">
+                            {brand.isActive ? 'Active' : 'Inactive'} • 
+                            Granted: {AdminUtils.formatRelativeTime(brand.grantedAt)}
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            brand.isActive 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {brand.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
                       </div>
+                    ))}
+                    {getFilteredBrandAccess(showAccessFor).length === 0 && (
+                      <div className="col-span-full text-center py-4 text-gray-500">
+                        {isLoadingAvailableItems ? 'Loading brands...' : 'No brand access available'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Marketplaces Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+                    <h3 className="text-lg font-semibold text-gray-800">Marketplaces</h3>
+                    <span className="text-sm text-gray-500">({getFilteredMarketplaceAccess(showAccessFor).length} available)</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {getFilteredMarketplaceAccess(showAccessFor).map((marketplace) => (
+                      <div key={marketplace.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{marketplace.name}</div>
+                          {marketplace.description && (
+                            <div className="text-sm text-gray-500">{marketplace.description}</div>
+                          )}
+                          <div className="text-xs text-gray-500">
+                            {marketplace.isActive ? 'Active' : 'Inactive'} • 
+                            Granted: {AdminUtils.formatRelativeTime(marketplace.grantedAt)}
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            marketplace.isActive 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {marketplace.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {getFilteredMarketplaceAccess(showAccessFor).length === 0 && (
+                      <div className="col-span-full text-center py-4 text-gray-500">
+                        {isLoadingAvailableItems ? 'Loading marketplaces...' : 'No marketplace access available'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Shipping Platforms Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
+                    <h3 className="text-lg font-semibold text-gray-800">Shipping Platforms</h3>
+                    <span className="text-sm text-gray-500">({getFilteredShippingAccess(showAccessFor).length} available)</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {getFilteredShippingAccess(showAccessFor).map((shipping) => (
+                      <div key={shipping.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{shipping.name}</div>
+                          {shipping.description && (
+                            <div className="text-sm text-gray-500">{shipping.description}</div>
+                          )}
+                          <div className="text-xs text-gray-500">
+                            {shipping.isActive ? 'Active' : 'Inactive'} • 
+                            Granted: {AdminUtils.formatRelativeTime(shipping.grantedAt)}
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            shipping.isActive 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {shipping.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {getFilteredShippingAccess(showAccessFor).length === 0 && (
+                      <div className="col-span-full text-center py-4 text-gray-500">
+                        {isLoadingAvailableItems ? 'Loading shipping platforms...' : 'No shipping access available'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Access Summary */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 mb-2">Access Summary</h4>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Brands:</span>
+                      <span className="ml-1 font-medium">{getFilteredBrandAccess(showAccessFor).length}</span>
                     </div>
                     <div>
-                      <div className="text-gray-600">Status</div>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${AdminUtils.getUserStatus(showAccessFor).color}`}></div>
-                        <span className="font-medium">{AdminUtils.getUserStatus(showAccessFor).text}</span>
-                      </div>
+                      <span className="text-gray-600">Marketplaces:</span>
+                      <span className="ml-1 font-medium">{getFilteredMarketplaceAccess(showAccessFor).length}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Shipping:</span>
+                      <span className="ml-1 font-medium">{getFilteredShippingAccess(showAccessFor).length}</span>
                     </div>
                   </div>
                 </div>
-              )}
-              
-              {(() => {
-                const totalGranted = 
-                  (showAccessFor.brandAccess?.filter(b => b.isActive).length || 0) +
-                  (showAccessFor.marketplaceAccess?.filter(m => m.isActive).length || 0) +
-                  (showAccessFor.shippingAccess?.filter(s => s.isActive).length || 0);
-                
-                return totalGranted === 0 && (
-                  <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded text-center">
-                    <div className="text-gray-500 text-sm">This user has no access permissions granted</div>
-                  </div>
-                );
-              })()}
-              
+              </div>
+
               <div className="flex justify-end mt-6">
                 <button 
                   onClick={() => setShowAccessFor(null)}

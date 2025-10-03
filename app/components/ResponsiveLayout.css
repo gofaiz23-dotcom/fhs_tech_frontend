@@ -1,0 +1,14 @@
+/* Responsive layout for sidebar */
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .main-content {
+    transition: margin-left 300ms ease-in-out, width 300ms ease-in-out, max-width 300ms ease-in-out;
+  }
+}

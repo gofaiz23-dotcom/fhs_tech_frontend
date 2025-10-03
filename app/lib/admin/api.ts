@@ -18,9 +18,10 @@ import {
   UpdateRoleRequest,
   AdminApiErrorResponse,
 } from './types';
+import { AuthService, ensureValidToken } from '../auth/api';
 
 // Base API configuration
-const API_BASE_URL = 'http://192.168.0.23:5000/api';
+const API_BASE_URL = 'https://fhs-tech-backend.onrender.com/api';
 const ADMIN_ENDPOINTS = {
   USERS_BASIC: `${API_BASE_URL}/admin/users/basic`,
   USERS_HISTORY: `${API_BASE_URL}/admin/users/history`,
@@ -29,6 +30,14 @@ const ADMIN_ENDPOINTS = {
   UPDATE_EMAIL: (id: number) => `${API_BASE_URL}/admin/users/${id}/email`,
   UPDATE_PASSWORD: (id: number) => `${API_BASE_URL}/admin/users/${id}/password`,
   UPDATE_ROLE: (id: number) => `${API_BASE_URL}/admin/users/${id}/role`,
+  // Toggle access endpoints
+  TOGGLE_BRAND_ACCESS: (userId: number, brandId: number) => `${API_BASE_URL}/users/${userId}/brands/${brandId}/toggle`,
+  TOGGLE_MARKETPLACE_ACCESS: (userId: number, marketplaceId: number) => `${API_BASE_URL}/users/${userId}/marketplaces/${marketplaceId}/toggle`,
+  TOGGLE_SHIPPING_ACCESS: (userId: number, shippingId: number) => `${API_BASE_URL}/users/${userId}/shipping/${shippingId}/toggle`,
+  // Available items endpoints
+  AVAILABLE_BRANDS: `${API_BASE_URL}/brands`,
+  AVAILABLE_MARKETPLACES: `${API_BASE_URL}/marketplaces`,
+  AVAILABLE_SHIPPING: `${API_BASE_URL}/shipping`,
 } as const;
 
 /**
@@ -46,10 +55,11 @@ export class AdminApiError extends Error {
 }
 
 /**
- * Generic admin API request handler with authentication
+ * Generic admin API request handler with authentication and automatic token refresh
  * 
  * @param url - The endpoint URL
  * @param options - Fetch options
+ * @param accessToken - Current access token (will be refreshed if expired)
  * @returns Promise with parsed JSON response
  */
 async function adminApiRequest<T>(url: string, options: RequestInit = {}, accessToken?: string): Promise<T> {
@@ -58,11 +68,17 @@ async function adminApiRequest<T>(url: string, options: RequestInit = {}, access
       throw new AdminApiError('Admin authentication required', 401, 'NO_TOKEN');
     }
 
+    // Ensure token is valid and refresh if needed
+    const validToken = await ensureValidToken(accessToken);
+    if (!validToken) {
+      throw new AdminApiError('Token expired and refresh failed', 401, 'TOKEN_EXPIRED');
+    }
+
     const response = await fetch(url, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${validToken}`,
         ...options.headers,
       },
       credentials: 'include',
@@ -72,6 +88,48 @@ async function adminApiRequest<T>(url: string, options: RequestInit = {}, access
 
     if (!response.ok) {
       const error = data as AdminApiErrorResponse;
+      
+      // Handle token expiration specifically
+      if (response.status === 401 && (error.error?.includes('expired') || error.error?.includes('invalid'))) {
+        console.log('🔄 Token expired, attempting refresh...');
+        
+        try {
+          // Try to refresh the token
+          const refreshResponse = await AuthService.refreshToken();
+          console.log('✅ Token refreshed successfully, retrying request...');
+          
+          // Retry the request with the new token
+          const retryResponse = await fetch(url, {
+            ...options,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${refreshResponse.accessToken}`,
+              ...options.headers,
+            },
+            credentials: 'include',
+          });
+
+          const retryData = await retryResponse.json();
+          
+          if (!retryResponse.ok) {
+            throw new AdminApiError(
+              retryData.error || 'Request failed after token refresh',
+              retryResponse.status,
+              retryData.code?.toString()
+            );
+          }
+          
+          return retryData as T;
+        } catch (refreshError) {
+          console.error('❌ Token refresh failed:', refreshError);
+          throw new AdminApiError(
+            'Session expired. Please log in again.',
+            401,
+            'TOKEN_REFRESH_FAILED'
+          );
+        }
+      }
+      
       throw new AdminApiError(
         error.error || 'An admin API error occurred',
         response.status,
@@ -133,6 +191,16 @@ export class AdminService {
     return adminApiRequest<AllUsersResponse>(ADMIN_ENDPOINTS.USERS_ACCESS, {
       method: 'GET',
     }, accessToken);
+  }
+
+  /**
+   * Get all users with complete access details (alias for getAllUsers)
+   * 
+   * @param accessToken - Admin access token
+   * @returns Promise<AllUsersResponse> - Users with full access information
+   */
+  static async getAllUsersWithAccess(accessToken: string): Promise<AllUsersResponse> {
+    return this.getAllUsers(accessToken);
   }
 
   /**
@@ -362,5 +430,119 @@ export class AdminUtils {
       color: 'bg-gray-500',
       text: 'Offline',
     };
+  }
+
+  /**
+   * Toggle brand access for a user
+   * 
+   * @param userId - User ID
+   * @param brandId - Brand ID
+   * @param accessToken - Admin access token
+   * @returns Promise with toggle result
+   */
+  static async toggleBrandAccess(
+    userId: number,
+    brandId: number,
+    accessToken: string
+  ): Promise<{ message: string; access: any }> {
+    return adminApiRequest<{ message: string; access: any }>(
+      ADMIN_ENDPOINTS.TOGGLE_BRAND_ACCESS(userId, brandId),
+      {
+        method: 'POST',
+      },
+      accessToken
+    );
+  }
+
+  /**
+   * Toggle marketplace access for a user
+   * 
+   * @param userId - User ID
+   * @param marketplaceId - Marketplace ID
+   * @param accessToken - Admin access token
+   * @returns Promise with toggle result
+   */
+  static async toggleMarketplaceAccess(
+    userId: number,
+    marketplaceId: number,
+    accessToken: string
+  ): Promise<{ message: string; access: any }> {
+    return adminApiRequest<{ message: string; access: any }>(
+      ADMIN_ENDPOINTS.TOGGLE_MARKETPLACE_ACCESS(userId, marketplaceId),
+      {
+        method: 'POST',
+      },
+      accessToken
+    );
+  }
+
+  /**
+   * Toggle shipping access for a user
+   * 
+   * @param userId - User ID
+   * @param shippingId - Shipping Company ID
+   * @param accessToken - Admin access token
+   * @returns Promise with toggle result
+   */
+  static async toggleShippingAccess(
+    userId: number,
+    shippingId: number,
+    accessToken: string
+  ): Promise<{ message: string; access: any }> {
+    return adminApiRequest<{ message: string; access: any }>(
+      ADMIN_ENDPOINTS.TOGGLE_SHIPPING_ACCESS(userId, shippingId),
+      {
+        method: 'POST',
+      },
+      accessToken
+    );
+  }
+
+  /**
+   * Get all available brands
+   * 
+   * @param accessToken - Admin access token
+   * @returns Promise with available brands
+   */
+  static async getAvailableBrands(accessToken: string): Promise<{ brands: any[] }> {
+    return adminApiRequest<{ brands: any[] }>(
+      ADMIN_ENDPOINTS.AVAILABLE_BRANDS,
+      {
+        method: 'GET',
+      },
+      accessToken
+    );
+  }
+
+  /**
+   * Get all available marketplaces
+   * 
+   * @param accessToken - Admin access token
+   * @returns Promise with available marketplaces
+   */
+  static async getAvailableMarketplaces(accessToken: string): Promise<{ marketplaces: any[] }> {
+    return adminApiRequest<{ marketplaces: any[] }>(
+      ADMIN_ENDPOINTS.AVAILABLE_MARKETPLACES,
+      {
+        method: 'GET',
+      },
+      accessToken
+    );
+  }
+
+  /**
+   * Get all available shipping companies
+   * 
+   * @param accessToken - Admin access token
+   * @returns Promise with available shipping companies
+   */
+  static async getAvailableShipping(accessToken: string): Promise<{ shippingCompanies: any[] }> {
+    return adminApiRequest<{ shippingCompanies: any[] }>(
+      ADMIN_ENDPOINTS.AVAILABLE_SHIPPING,
+      {
+        method: 'GET',
+      },
+      accessToken
+    );
   }
 }

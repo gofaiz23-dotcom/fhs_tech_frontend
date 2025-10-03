@@ -1,11 +1,17 @@
-import Inventory from "../components/inventory"
+"use client";
+
+import React from 'react';
+import Inventory from "../components/inventory";
+import { ProtectedRoute } from '../lib/auth';
 
 export default function InventoryPage() {
   return (
-    <div className="p-4">
-      <Inventory />
-    </div>
-  )
+    <ProtectedRoute>
+      <div className="p-4">
+        <Inventory />
+      </div>
+    </ProtectedRoute>
+  );
 }
 
 
