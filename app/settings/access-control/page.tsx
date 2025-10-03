@@ -5,6 +5,9 @@ import { Settings, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { AdminService, AdminUtils } from "../../lib/admin";
 import { useAuth } from "../../lib/auth";
 import type { DetailedUser } from "../../lib/admin/types";
+import AppleToggle from "../../components/AppleToggle";
+import { usePermissionsStore } from "../../lib/stores/permissionsStore";
+import { AccessControlService, type Brand, type Marketplace, type ShippingPlatform } from "../../lib/access-control";
 
 type PermissionItem = { name: string; enabled: boolean };
 type AdminUser = {
@@ -24,15 +27,105 @@ type AdminUser = {
 export default function AccessControlPage() {
   // Authentication context
   const { state: authState, logout } = useAuth();
+  
+  // Permissions store
+  const { 
+    getUserPermissions, 
+    updateUserPermissions, 
+    getPermissionCounts 
+  } = usePermissionsStore();
 
   // API data state
   const [users, setUsers] = React.useState<DetailedUser[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
+  // Access control data state
+  const [brands, setBrands] = React.useState<Brand[]>([]);
+  const [marketplaces, setMarketplaces] = React.useState<Marketplace[]>([]);
+  const [shippingPlatforms, setShippingPlatforms] = React.useState<ShippingPlatform[]>([]);
+  const [isLoadingAccessData, setIsLoadingAccessData] = React.useState(false);
+
   // UI state
   const [showGrantAccess, setShowGrantAccess] = React.useState<DetailedUser | null>(null);
   const [showPermissions, setShowPermissions] = React.useState<{ user: DetailedUser; type: 'brands' | 'marketplaces' | 'shippingPlatforms' } | null>(null);
+  const [superUserMode, setSuperUserMode] = React.useState(false);
+
+  // Loading state for toggle operations
+  const [togglingItems, setTogglingItems] = React.useState<Set<string>>(new Set());
+
+  // State for toggle switches
+  const [brandAccess, setBrandAccess] = React.useState<Record<number, boolean>>({});
+  const [marketplaceAccess, setMarketplaceAccess] = React.useState<Record<number, boolean>>({});
+  const [shippingAccess, setShippingAccess] = React.useState<Record<number, boolean>>({});
+
+  /**
+   * Load access control data (brands, marketplaces, shipping platforms)
+   */
+  const loadAccessControlData = React.useCallback(async () => {
+    if (!authState.accessToken) {
+      setError('No access token available');
+      return;
+    }
+
+    try {
+      setIsLoadingAccessData(true);
+      setError(null);
+      
+      const [brandsResponse, marketplacesResponse, shippingResponse] = await Promise.all([
+        AccessControlService.getBrands(authState.accessToken),
+        AccessControlService.getMarketplaces(authState.accessToken),
+        AccessControlService.getShippingPlatforms(authState.accessToken)
+      ]);
+      
+      setBrands(brandsResponse.brands);
+      setMarketplaces(marketplacesResponse.marketplaces);
+      setShippingPlatforms(shippingResponse.shippingCompanies);
+    } catch (error: any) {
+      console.error('Failed to load access control data:', error);
+      setError(error.message || 'Failed to load access control data');
+    } finally {
+      setIsLoadingAccessData(false);
+    }
+  }, [authState.accessToken]);
+
+  // Load access control data on component mount
+  React.useEffect(() => {
+    if (authState.isAuthenticated && authState.accessToken && !authState.isLoading) {
+      loadAccessControlData();
+    }
+  }, [loadAccessControlData, authState.isAuthenticated, authState.accessToken, authState.isLoading]);
+
+  // Initialize permissions when user is selected
+  React.useEffect(() => {
+    if (showGrantAccess && brands && marketplaces && shippingPlatforms) {
+      const userPermissions = getUserPermissions(showGrantAccess.id.toString());
+      
+      // Initialize brand access
+      const brandStates: Record<number, boolean> = {};
+      brands.forEach(brand => {
+        const hasAccess = userPermissions.brandAccess.some(b => b.id === brand.id && b.isActive);
+        brandStates[brand.id] = hasAccess;
+      });
+      setBrandAccess(brandStates);
+
+      // Initialize marketplace access
+      const marketplaceStates: Record<number, boolean> = {};
+      marketplaces.forEach(marketplace => {
+        const hasAccess = userPermissions.marketplaceAccess.some(m => m.id === marketplace.id && m.isActive);
+        marketplaceStates[marketplace.id] = hasAccess;
+      });
+      setMarketplaceAccess(marketplaceStates);
+
+      // Initialize shipping access
+      const shippingStates: Record<number, boolean> = {};
+      shippingPlatforms.forEach(shipping => {
+        const hasAccess = userPermissions.shippingAccess.some(s => s.id === shipping.id && s.isActive);
+        shippingStates[shipping.id] = hasAccess;
+      });
+      setShippingAccess(shippingStates);
+    }
+  }, [showGrantAccess, getUserPermissions, brands, marketplaces, shippingPlatforms]);
 
   /**
    * Load users from API
@@ -65,20 +158,24 @@ export default function AccessControlPage() {
 
   // Load users on component mount
   React.useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    // Only load users if authentication is complete and we have a token
+    if (authState.isAuthenticated && authState.accessToken && !authState.isLoading) {
+      loadUsers();
+    }
+  }, [loadUsers, authState.isAuthenticated, authState.accessToken, authState.isLoading]);
 
   /**
    * Get permission count for a user
    */
   const getPermissionCount = (user: DetailedUser, type: 'brands' | 'marketplaces' | 'shippingPlatforms') => {
+    const counts = getPermissionCounts(user.id.toString());
     switch (type) {
       case 'brands':
-        return user.brandAccess?.filter(p => p.isActive).length || 0;
+        return counts.brands.granted;
       case 'marketplaces':
-        return user.marketplaceAccess?.filter(p => p.isActive).length || 0;
+        return counts.marketplaces.granted;
       case 'shippingPlatforms':
-        return user.shippingAccess?.filter(p => p.isActive).length || 0;
+        return counts.shipping.granted;
       default:
         return 0;
     }
@@ -88,13 +185,14 @@ export default function AccessControlPage() {
    * Get total permission count for a user
    */
   const getTotalCount = (user: DetailedUser, type: 'brands' | 'marketplaces' | 'shippingPlatforms') => {
+    const counts = getPermissionCounts(user.id.toString());
     switch (type) {
       case 'brands':
-        return user.brandAccess?.length || 0;
+        return counts.brands.total || (brands?.length || 0);
       case 'marketplaces':
-        return user.marketplaceAccess?.length || 0;
+        return counts.marketplaces.total || (marketplaces?.length || 0);
       case 'shippingPlatforms':
-        return user.shippingAccess?.length || 0;
+        return counts.shipping.total || (shippingPlatforms?.length || 0);
       default:
         return 0;
     }
@@ -105,6 +203,144 @@ export default function AccessControlPage() {
    */
   const getDisplayUsername = (user: DetailedUser) => {
     return user.username || user.email.split('@')[0];
+  };
+
+  /**
+   * Handle brand access toggle
+   */
+  const handleBrandToggle = async (brandId: number, checked: boolean) => {
+    if (!showGrantAccess || !authState.accessToken) return;
+
+    const toggleKey = `brand-${brandId}`;
+    setTogglingItems(prev => new Set(prev).add(toggleKey));
+
+    try {
+      await AccessControlService.toggleBrandAccess(
+        showGrantAccess.id.toString(),
+        brandId,
+        authState.accessToken
+      );
+
+      // Update local state
+      setBrandAccess(prev => ({
+        ...prev,
+        [brandId]: checked
+      }));
+
+      // Update permissions store
+      const userPermissions = getUserPermissions(showGrantAccess.id.toString());
+      const updatedBrandAccess = userPermissions.brandAccess.map(brand => 
+        brand.id === brandId ? { ...brand, isActive: checked } : brand
+      );
+      
+      updateUserPermissions(showGrantAccess.id.toString(), {
+        ...userPermissions,
+        brandAccess: updatedBrandAccess
+      });
+
+      console.log(`Brand access toggled: ${brandId} -> ${checked}`);
+    } catch (error: any) {
+      console.error('Failed to toggle brand access:', error);
+      setError(error.message || 'Failed to toggle brand access');
+    } finally {
+      setTogglingItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(toggleKey);
+        return newSet;
+      });
+    }
+  };
+
+  /**
+   * Handle marketplace access toggle
+   */
+  const handleMarketplaceToggle = async (marketplaceId: number, checked: boolean) => {
+    if (!showGrantAccess || !authState.accessToken) return;
+
+    const toggleKey = `marketplace-${marketplaceId}`;
+    setTogglingItems(prev => new Set(prev).add(toggleKey));
+
+    try {
+      await AccessControlService.toggleMarketplaceAccess(
+        showGrantAccess.id.toString(),
+        marketplaceId,
+        authState.accessToken
+      );
+
+      // Update local state
+      setMarketplaceAccess(prev => ({
+        ...prev,
+        [marketplaceId]: checked
+      }));
+
+      // Update permissions store
+      const userPermissions = getUserPermissions(showGrantAccess.id.toString());
+      const updatedMarketplaceAccess = userPermissions.marketplaceAccess.map(marketplace => 
+        marketplace.id === marketplaceId ? { ...marketplace, isActive: checked } : marketplace
+      );
+      
+      updateUserPermissions(showGrantAccess.id.toString(), {
+        ...userPermissions,
+        marketplaceAccess: updatedMarketplaceAccess
+      });
+
+      console.log(`Marketplace access toggled: ${marketplaceId} -> ${checked}`);
+    } catch (error: any) {
+      console.error('Failed to toggle marketplace access:', error);
+      setError(error.message || 'Failed to toggle marketplace access');
+    } finally {
+      setTogglingItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(toggleKey);
+        return newSet;
+      });
+    }
+  };
+
+  /**
+   * Handle shipping access toggle
+   */
+  const handleShippingToggle = async (shippingId: number, checked: boolean) => {
+    if (!showGrantAccess || !authState.accessToken) return;
+
+    const toggleKey = `shipping-${shippingId}`;
+    setTogglingItems(prev => new Set(prev).add(toggleKey));
+
+    try {
+      await AccessControlService.toggleShippingAccess(
+        showGrantAccess.id.toString(),
+        shippingId,
+        authState.accessToken
+      );
+
+      // Update local state
+      setShippingAccess(prev => ({
+        ...prev,
+        [shippingId]: checked
+      }));
+
+      // Update permissions store
+      const userPermissions = getUserPermissions(showGrantAccess.id.toString());
+      const updatedShippingAccess = userPermissions.shippingAccess.map(shipping => 
+        shipping.id === shippingId ? { ...shipping, isActive: checked } : shipping
+      );
+      
+      updateUserPermissions(showGrantAccess.id.toString(), {
+        ...userPermissions,
+        shippingAccess: updatedShippingAccess
+      });
+
+      console.log(`Shipping access toggled: ${shippingId} -> ${checked}`);
+    } catch (error: any) {
+      console.error('Failed to toggle shipping access:', error);
+      setError(error.message || 'Failed to toggle shipping access');
+    } finally {
+      setTogglingItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(toggleKey);
+        return newSet;
+      });
+    }
   };
 
   /**
@@ -252,126 +488,141 @@ export default function AccessControlPage() {
                 </button>
               </div>
               
-              {/* Notice about read-only mode */}
-              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <div className="text-amber-800 text-sm">
-                  <strong>Note:</strong> This is a read-only view. Permission management APIs are not yet implemented. 
-                  Use the Manage Users page to edit user roles.
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <div className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                    Brands
-                  </div>
-                  <div className="space-y-2">
-                    {showGrantAccess.brandAccess?.filter(b => b.isActive).map((brand, i) => (
-                      <div key={i} className="text-sm text-gray-700 bg-blue-50 border border-blue-200 rounded px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                          <div>
-                            <div className="font-medium">{brand.name}</div>
-                            {brand.description && (
-                              <div className="text-xs text-gray-500">{brand.description}</div>
-                            )}
-                            <div className="text-xs text-gray-500">
-                              Granted: {AdminUtils.formatRelativeTime(brand.grantedAt)}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )) || <div className="text-sm text-gray-400 italic">No brands granted</div>}
-                  </div>
-                </div>
-                <div>
-                  <div className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                    Marketplaces
-                  </div>
-                  <div className="space-y-2">
-                    {showGrantAccess.marketplaceAccess?.filter(m => m.isActive).map((marketplace, i) => (
-                      <div key={i} className="text-sm text-gray-700 bg-green-50 border border-green-200 rounded px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <div>
-                            <div className="font-medium">{marketplace.name}</div>
-                            {marketplace.description && (
-                              <div className="text-xs text-gray-500">{marketplace.description}</div>
-                            )}
-                            <div className="text-xs text-gray-500">
-                              Granted: {AdminUtils.formatRelativeTime(marketplace.grantedAt)}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )) || <div className="text-sm text-gray-400 italic">No marketplaces granted</div>}
-                  </div>
-                </div>
-                <div>
-                  <div className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                    <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                    Shipping Platforms
-                  </div>
-                  <div className="space-y-2">
-                    {showGrantAccess.shippingAccess?.filter(s => s.isActive).map((shipping, i) => (
-                      <div key={i} className="text-sm text-gray-700 bg-purple-50 border border-purple-200 rounded px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                          <div>
-                            <div className="font-medium">{shipping.name}</div>
-                            {shipping.description && (
-                              <div className="text-xs text-gray-500">{shipping.description}</div>
-                            )}
-                            <div className="text-xs text-gray-500">
-                              Granted: {AdminUtils.formatRelativeTime(shipping.grantedAt)}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )) || <div className="text-sm text-gray-400 italic">No shipping platforms granted</div>}
-                  </div>
-                </div>
-              </div>
-
-              {/* Login Statistics */}
-              {showGrantAccess.loginStats && (
-                <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded">
-                  <h4 className="font-medium text-gray-800 mb-3">Login Activity</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <div className="text-gray-600">Total Sessions</div>
-                      <div className="font-medium">{showGrantAccess.loginStats.totalSessions}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Total Hours</div>
-                      <div className="font-medium">{showGrantAccess.loginStats.totalLoginHours.toFixed(1)}h</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Last Login</div>
-                      <div className="font-medium">
-                        {showGrantAccess.loginStats.lastLogin 
-                          ? AdminUtils.formatRelativeTime(showGrantAccess.loginStats.lastLogin)
-                          : 'Never'
-                        }
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Status</div>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${AdminUtils.getUserStatus(showGrantAccess).color}`}></div>
-                        <span className="font-medium">{AdminUtils.getUserStatus(showGrantAccess).text}</span>
-                      </div>
+              {/* Loading state for access control data */}
+              {isLoadingAccessData && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Loader2 size={16} className="animate-spin text-blue-600" />
+                    <div className="text-blue-800 text-sm">
+                      Loading access control data...
                     </div>
                   </div>
                 </div>
               )}
+
+              {/* Super User Toggle */}
+              <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full"></div>
+                    <div>
+                      <h3 className="font-semibold text-gray-800">Super User Mode</h3>
+                      <p className="text-sm text-gray-600">Enable all access permissions at once</p>
+                    </div>
+                  </div>
+          <AppleToggle
+            checked={superUserMode}
+            onChange={(checked) => {
+              setSuperUserMode(checked);
+              if (checked) {
+                // Enable all toggles
+                const allBrands = brands.reduce((acc, brand) => ({ ...acc, [brand.id]: true }), {});
+                const allMarketplaces = marketplaces.reduce((acc, marketplace) => ({ ...acc, [marketplace.id]: true }), {});
+                const allShipping = shippingPlatforms.reduce((acc, shipping) => ({ ...acc, [shipping.id]: true }), {});
+                setBrandAccess(allBrands);
+                setMarketplaceAccess(allMarketplaces);
+                setShippingAccess(allShipping);
+              } else {
+                // Disable all toggles
+                setBrandAccess({});
+                setMarketplaceAccess({});
+                setShippingAccess({});
+              }
+            }}
+            size="lg"
+          />
+                </div>
+              </div>
+
+              {/* Grid Layout - All Categories */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Brands Column */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
+                    <h3 className="text-lg font-semibold text-gray-800">Brands</h3>
+                    <span className="text-sm text-gray-500">
+                      ({Object.values(brandAccess).filter(Boolean).length}/{brands?.length || 0})
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {brands?.map((brand) => (
+                      <div key={brand.id} className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{brand.name}</div>
+                          <div className="text-sm text-gray-500">{brand.description}</div>
+                        </div>
+                        <AppleToggle
+                          checked={brandAccess[brand.id] || false}
+                          onChange={(checked) => handleBrandToggle(brand.id, checked)}
+                          disabled={togglingItems.has(`brand-${brand.id}`)}
+                          size="md"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Marketplaces Column */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+                    <h3 className="text-lg font-semibold text-gray-800">Marketplaces</h3>
+                    <span className="text-sm text-gray-500">
+                      ({Object.values(marketplaceAccess).filter(Boolean).length}/{marketplaces?.length || 0})
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {marketplaces?.map((marketplace) => (
+                      <div key={marketplace.id} className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{marketplace.name}</div>
+                          <div className="text-sm text-gray-500">{marketplace.description}</div>
+                        </div>
+                        <AppleToggle
+                          checked={marketplaceAccess[marketplace.id] || false}
+                          onChange={(checked) => handleMarketplaceToggle(marketplace.id, checked)}
+                          disabled={togglingItems.has(`marketplace-${marketplace.id}`)}
+                          size="md"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Shipping Platforms Column */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
+                    <h3 className="text-lg font-semibold text-gray-800">Shipping Platforms</h3>
+                    <span className="text-sm text-gray-500">
+                      ({Object.values(shippingAccess).filter(Boolean).length}/{shippingPlatforms?.length || 0})
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {shippingPlatforms?.map((shipping) => (
+                      <div key={shipping.id} className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{shipping.name}</div>
+                          <div className="text-sm text-gray-500">{shipping.description}</div>
+                        </div>
+                        <AppleToggle
+                          checked={shippingAccess[shipping.id] || false}
+                          onChange={(checked) => handleShippingToggle(shipping.id, checked)}
+                          disabled={togglingItems.has(`shipping-${shipping.id}`)}
+                          size="md"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               
-              <div className="flex justify-end mt-6">
+              <div className="flex justify-end gap-3 mt-6">
                 <button
                   onClick={() => setShowGrantAccess(null)}
-                  className="bg-gray-600 hover:bg-gray-700 text-white text-sm px-6 py-2 rounded"
+                  className="bg-gray-500 hover:bg-gray-600 text-white text-sm px-6 py-2 rounded"
                 >
                   Close
                 </button>

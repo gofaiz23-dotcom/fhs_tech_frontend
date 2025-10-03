@@ -24,7 +24,7 @@ import {
 } from './types';
 
 // Base API configuration
-const API_BASE_URL = 'http://192.168.0.23:5000/api';
+const API_BASE_URL = 'https://fhs-tech-backend.onrender.com/api';
 const AUTH_ENDPOINTS = {
   LOGIN: `${API_BASE_URL}/auth/login`,
   REGISTER: `${API_BASE_URL}/auth/register`,
@@ -37,13 +37,18 @@ const AUTH_ENDPOINTS = {
  * Custom error class for authentication-specific errors
  */
 export class AuthApiError extends Error {
+  public statusCode: number;
+  public code?: string;
+
   constructor(
     message: string,
-    public statusCode: number,
-    public code?: string
+    statusCode: number,
+    code?: string
   ) {
     super(message);
     this.name = 'AuthApiError';
+    this.statusCode = statusCode;
+    this.code = code;
   }
 }
 
@@ -56,6 +61,13 @@ export class AuthApiError extends Error {
  */
 async function apiRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
   try {
+    console.log('🌐 API: Making request to:', url);
+    console.log('🌐 API: Request options:', {
+      method: options.method,
+      headers: options.headers,
+      hasBody: !!options.body
+    });
+
     const response = await fetch(url, {
       ...options,
       headers: {
@@ -65,19 +77,48 @@ async function apiRequest<T>(url: string, options: RequestInit = {}): Promise<T>
       credentials: 'include', // Important for HttpOnly cookies
     });
 
-    const data = await response.json();
+    console.log('🌐 API: Response status:', response.status);
+    console.log('🌐 API: Response headers:', Object.fromEntries(response.headers.entries()));
+
+    let data: any;
+    try {
+      data = await response.json();
+      console.log('🌐 API: Response data:', data);
+    } catch (parseError) {
+      console.error('❌ API: Failed to parse JSON response:', parseError);
+      // If JSON parsing fails, create a fallback error object
+      data = {
+        error: `Invalid JSON response from server (${response.status})`,
+        code: 'INVALID_JSON'
+      };
+    }
 
     if (!response.ok) {
       const error = data as AuthError;
+      const errorMessage = error?.error || `API error: ${response.statusText}`;
+      const errorCode = error?.code?.toString() || response.status.toString();
+      
+      console.error('❌ API: Request failed:', {
+        status: response.status,
+        statusText: response.statusText,
+        message: errorMessage,
+        code: errorCode,
+        fullError: error,
+        url: url
+      });
+      
       throw new AuthApiError(
-        error.error || 'An error occurred',
+        errorMessage,
         response.status,
-        error.code?.toString()
+        errorCode
       );
     }
 
+    console.log('✅ API: Request successful');
     return data as T;
   } catch (error) {
+    console.error('❌ API: Network/parsing error:', error);
+    
     if (error instanceof AuthApiError) {
       throw error;
     }
@@ -121,6 +162,40 @@ function detectNetworkType(): NetworkType {
 /**
  * User Authentication Service
  */
+/**
+ * Test API connectivity and server status
+ */
+export async function testApiConnectivity(): Promise<{
+  isReachable: boolean;
+  status: number;
+  error?: string;
+}> {
+  try {
+    console.log('🔍 Testing API connectivity to:', API_BASE_URL);
+    
+    const response = await fetch(`${API_BASE_URL}/health`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    console.log('🔍 Health check response:', response.status);
+    
+    return {
+      isReachable: true,
+      status: response.status,
+    };
+  } catch (error) {
+    console.error('🔍 API connectivity test failed:', error);
+    return {
+      isReachable: false,
+      status: 0,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
 export class AuthService {
   /**
    * Authenticate user with email and password
@@ -134,15 +209,32 @@ export class AuthService {
       networkType: credentials.networkType || detectNetworkType(),
     };
 
-    const response = await apiRequest<LoginResponse>(AUTH_ENDPOINTS.LOGIN, {
-      method: 'POST',
-      body: JSON.stringify(loginData),
+    // Debug logging
+    console.log('🔐 Auth: Attempting login...');
+    console.log('🔐 Auth: Login endpoint:', AUTH_ENDPOINTS.LOGIN);
+    console.log('🔐 Auth: Login data:', {
+      email: loginData.email,
+      networkType: loginData.networkType,
+      hasPassword: !!loginData.password
     });
 
-    // Access token will be stored by the auth store
-    // Note: Refresh token is automatically stored as HttpOnly cookie
+    try {
+      const response = await apiRequest<LoginResponse>(AUTH_ENDPOINTS.LOGIN, {
+        method: 'POST',
+        body: JSON.stringify(loginData),
+      });
 
-    return response;
+      console.log('✅ Auth: Login successful');
+      return response;
+    } catch (error) {
+      console.error('❌ Auth: Login failed:', error);
+      console.error('❌ Auth: Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        statusCode: error instanceof AuthApiError ? error.statusCode : 'Unknown',
+        code: error instanceof AuthApiError ? error.code : 'Unknown'
+      });
+      throw error;
+    }
   }
 
   /**
@@ -282,23 +374,45 @@ export class AuthService {
 export async function ensureValidToken(currentToken: string | null): Promise<string | null> {
   try {
     if (!currentToken) {
+      console.log('⚠️ No current token available');
       return null;
     }
 
-    // Check if token is expired or will expire in the next 2 minutes
+    // Check if token is expired or will expire in the next 3 minutes (appropriate for 15-min tokens)
     const payload = JSON.parse(atob(currentToken.split('.')[1]));
     const currentTime = Date.now() / 1000;
-    const bufferTime = 120; // 2 minutes buffer
+    const bufferTime = 180; // 3 minutes buffer (appropriate for 15-minute token expiration)
     
     if (payload.exp <= currentTime + bufferTime) {
       // Token is expired or will expire soon, refresh it
-      const refreshResponse = await AuthService.refreshToken();
-      return refreshResponse.accessToken;
+      console.log('🔄 Token expiring soon, refreshing...');
+      try {
+        const refreshResponse = await AuthService.refreshToken();
+        console.log('✅ Token refreshed successfully');
+        return refreshResponse.accessToken;
+      } catch (refreshError: any) {
+        console.error('❌ Token refresh failed:', refreshError);
+        
+        // Check if it's a refresh token issue
+        if (refreshError.message?.includes('Refresh token not provided') || 
+            refreshError.message?.includes('refresh') ||
+            refreshError.statusCode === 401) {
+          console.log('🔄 Refresh token expired or invalid, user needs to login again');
+          // Return null to force re-authentication
+          return null;
+        }
+        
+        // For other errors, return the current token
+        console.log('⚠️ Returning current token despite refresh failure');
+        return currentToken;
+      }
     }
     
     return currentToken;
   } catch (error) {
-    // If refresh fails, return null (auth store will handle cleanup)
+    console.error('❌ Token validation failed:', error);
+    // If token parsing fails, return null to force re-authentication
+    console.log('⚠️ Token validation failed, forcing re-authentication');
     return null;
   }
 }

@@ -4,6 +4,7 @@ import "./globals.css";
 import AppShell from "./components/AppShell";
 import { WarehouseProvider } from "./components/warehouses/WarehouseProvider";
 import { AuthProvider } from "./lib/auth/context";
+import { SidebarProvider } from "./components/SidebarContext";
 // import '../styles/globals.css';
 
 
@@ -31,11 +32,13 @@ export default function RootLayout({
     <html lang="en">
       <body suppressHydrationWarning>
         <AuthProvider>
-          <WarehouseProvider>
-            <AppShell>
-              {children}
-            </AppShell>
-          </WarehouseProvider>
+          <SidebarProvider>
+            <WarehouseProvider>
+              <AppShell>
+                {children}
+              </AppShell>
+            </WarehouseProvider>
+          </SidebarProvider>
         </AuthProvider>
       </body>
     </html>
