@@ -129,7 +129,7 @@ export const useAuthStore = create<AuthStore>()(
       }),
       onRehydrateStorage: () => {
         console.log('🔄 Zustand: Starting rehydration...');
-        return (state: AuthStore | undefined) => {
+        return (state: AuthStore | undefined): void => {
           console.log('🏪 Zustand: Rehydration complete', { 
             hasUser: !!state?.user, 
             hasToken: !!state?.accessToken,
