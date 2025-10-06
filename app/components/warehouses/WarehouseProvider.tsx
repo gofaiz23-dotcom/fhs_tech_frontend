@@ -1,13 +1,6 @@
 "use client";
 import React from "react";
-import { useWarehousesStore } from '../../lib/stores/warehousesStore';
-
-export type Warehouse = {
-  id: string;
-  name: string;
-  address: string;
-  inventorySource: string;
-};
+import { useWarehousesStore, Warehouse } from '../../lib/stores/warehousesStore';
 
 interface WarehouseContextType {
   warehouses: Warehouse[];
