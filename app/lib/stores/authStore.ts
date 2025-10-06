@@ -48,110 +48,85 @@ const initialState: AuthState = {
 /**
  * Authentication store with persistence
  * 
- * Persists user and token data to localStorage while maintaining
- * reactive state updates throughout the application.
+ * Uses localStorage to persist authentication state across page refreshes.
+ * Access tokens are stored securely and restored on app initialization.
  */
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
-      ...initialState,
+  ...initialState,
 
-      // Set authenticated user
-      setUser: (user) => {
-        set({ 
-          user, 
-          isAuthenticated: true, 
-          isLoading: false,
-          error: null 
-        });
-      },
+  // Set authenticated user
+  setUser: (user) => {
+    set({ 
+      user, 
+      isAuthenticated: true, 
+      isLoading: false,
+      error: null 
+    });
+  },
 
-      // Set access token
-      setAccessToken: (accessToken) => {
-        set({ accessToken });
-      },
+  // Set access token
+  setAccessToken: (accessToken) => {
+    set({ accessToken });
+  },
 
-      // Set authentication status
-      setAuthenticated: (isAuthenticated) => {
-        set({ isAuthenticated });
-      },
+  // Set authentication status
+  setAuthenticated: (isAuthenticated) => {
+    set({ isAuthenticated });
+  },
 
-      // Set loading state
-      setLoading: (isLoading) => {
-        set({ isLoading });
-      },
+  // Set loading state
+  setLoading: (isLoading) => {
+    set({ isLoading });
+  },
 
-      // Set error message
-      setError: (error) => {
-        set({ error, isLoading: false });
-      },
+  // Set error message
+  setError: (error) => {
+    set({ error, isLoading: false });
+  },
 
-      // Clear error message
-      clearError: () => {
-        set({ error: null });
-      },
+  // Clear error message
+  clearError: () => {
+    set({ error: null });
+  },
 
-      // Logout user
-      logout: () => {
-        set({
-          user: null,
-          accessToken: null,
-          isAuthenticated: false,
-          isLoading: false,
-          error: null,
-        });
-      },
+  // Logout user
+  logout: () => {
+    set({
+      user: null,
+      accessToken: null,
+      isAuthenticated: false,
+      isLoading: false,
+      error: null,
+    });
+  },
 
-      // Update authentication state (login success)
-      updateAuthState: ({ user, accessToken }) => {
-        set({
-          user,
-          accessToken,
-          isAuthenticated: true,
-          isLoading: false,
-          error: null,
-        });
-      },
+  // Update authentication state (login success)
+  updateAuthState: ({ user, accessToken }) => {
+    set({
+      user,
+      accessToken,
+      isAuthenticated: true,
+      isLoading: false,
+      error: null,
+    });
+  },
 
-      // Clear all authentication state
-      clearAuthState: () => {
-        set(initialState);
-      },
+  // Clear all authentication state
+  clearAuthState: () => {
+    set(initialState);
+  },
     }),
     {
-      name: 'fhs-auth-store', // unique name for localStorage key
-      storage: createJSONStorage(() => localStorage), // use localStorage
+      name: 'auth-storage', // localStorage key
+      storage: createJSONStorage(() => localStorage),
+      // Only persist essential auth data
       partialize: (state) => ({
-        // Only persist certain fields
         user: state.user,
         accessToken: state.accessToken,
         isAuthenticated: state.isAuthenticated,
       }),
-      onRehydrateStorage: () => {
-        console.log('🔄 Zustand: Starting rehydration...');
-        return (state: AuthStore | undefined): void => {
-          console.log('🏪 Zustand: Rehydration complete', { 
-            hasUser: !!state?.user, 
-            hasToken: !!state?.accessToken,
-            isAuthenticated: state?.isAuthenticated 
-          });
-          
-          // Reset loading state after rehydration
-          if (state) {
-            // If we have both user and token, consider as already initialized
-            if (state.user && state.accessToken) {
-              console.log('✅ Zustand: Valid auth data found, setting as authenticated');
-              state.setLoading(false);
-              state.setAuthenticated(true);
-            } else {
-              // No valid auth data, start fresh
-              console.log('❌ Zustand: No valid auth data, starting fresh');
-              state.setLoading(true);
-              state.setAuthenticated(false);
-            }
-          }
-        };
-      },
     }
   )
 );

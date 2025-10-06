@@ -1,12 +1,12 @@
 /**
  * Authentication API Service
  * 
- * This service handles all authentication-related API calls including login,
- * registration, token refresh, logout, and profile management. It provides
- * a clean interface for the frontend to interact with the authentication backend.
+ * This service handles all authentication-related API calls using HttpOnly cookies.
+ * The backend manages refresh tokens automatically via HttpOnly cookies.
  * 
  * Features:
- * - Automatic token refresh every 13 minutes
+ * - HttpOnly cookie-based authentication
+ * - Automatic refresh token handling by backend
  * - Network type detection for login tracking
  * - Comprehensive error handling
  */
@@ -22,6 +22,7 @@ import {
   AuthError,
   NetworkType
 } from './types';
+import { HttpClient } from './httpClient';
 
 // Base API configuration
 const API_BASE_URL = 'https://fhs-tech-backend.onrender.com/api';
@@ -53,83 +54,13 @@ export class AuthApiError extends Error {
 }
 
 /**
- * Generic API request handler with error handling
- * 
- * @param url - The endpoint URL
- * @param options - Fetch options
- * @returns Promise with parsed JSON response
+ * Legacy API request handler - now uses HttpClient internally
+ * @deprecated Use HttpClient directly instead
  */
 async function apiRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
-  try {
-    console.log('🌐 API: Making request to:', url);
-    console.log('🌐 API: Request options:', {
-      method: options.method,
-      headers: options.headers,
-      hasBody: !!options.body
-    });
-
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      credentials: 'include', // Important for HttpOnly cookies
-    });
-
-    console.log('🌐 API: Response status:', response.status);
-    console.log('🌐 API: Response headers:', Object.fromEntries(response.headers.entries()));
-
-    let data: any;
-    try {
-      data = await response.json();
-      console.log('🌐 API: Response data:', data);
-    } catch (parseError) {
-      console.error('❌ API: Failed to parse JSON response:', parseError);
-      // If JSON parsing fails, create a fallback error object
-      data = {
-        error: `Invalid JSON response from server (${response.status})`,
-        code: 'INVALID_JSON'
-      };
-    }
-
-    if (!response.ok) {
-      const error = data as AuthError;
-      const errorMessage = error?.error || `API error: ${response.statusText}`;
-      const errorCode = error?.code?.toString() || response.status.toString();
-      
-      console.error('❌ API: Request failed:', {
-        status: response.status,
-        statusText: response.statusText,
-        message: errorMessage,
-        code: errorCode,
-        fullError: error,
-        url: url
-      });
-      
-      throw new AuthApiError(
-        errorMessage,
-        response.status,
-        errorCode
-      );
-    }
-
-    console.log('✅ API: Request successful');
-    return data as T;
-  } catch (error) {
-    console.error('❌ API: Network/parsing error:', error);
-    
-    if (error instanceof AuthApiError) {
-      throw error;
-    }
-    
-    // Handle network or other errors
-    throw new AuthApiError(
-      'Network error or server unavailable',
-      0,
-      'NETWORK_ERROR'
-    );
-  }
+  // Convert full URL to endpoint path for HttpClient
+  const endpoint = url.replace(API_BASE_URL, '');
+  return HttpClient.request<T>(endpoint, options);
 }
 
 /**
@@ -178,9 +109,11 @@ export async function testApiConnectivity(): Promise<{
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include', // Include cookies for health check too
     });
     
     console.log('🔍 Health check response:', response.status);
+    console.log('🔍 Health check headers:', Object.fromEntries(response.headers.entries()));
     
     return {
       isReachable: true,
@@ -196,12 +129,46 @@ export async function testApiConnectivity(): Promise<{
   }
 }
 
+/**
+ * Test cookie availability and domain configuration
+ */
+export async function testCookieConfiguration(): Promise<{
+  cookiesAvailable: boolean;
+  cookieString: string;
+  domain: string;
+  isSecure: boolean;
+}> {
+  const result = {
+    cookiesAvailable: false,
+    cookieString: '',
+    domain: '',
+    isSecure: false,
+  };
+
+  if (typeof window === 'undefined') {
+    return result;
+  }
+
+  try {
+    result.cookiesAvailable = !!document.cookie;
+    result.cookieString = document.cookie;
+    result.domain = window.location.hostname;
+    result.isSecure = window.location.protocol === 'https:';
+    
+    console.log('🍪 Cookie test results:', result);
+    return result;
+  } catch (error) {
+    console.error('🍪 Cookie test failed:', error);
+    return result;
+  }
+}
+
 export class AuthService {
   /**
    * Authenticate user with email and password
    * 
    * @param credentials - User login credentials
-   * @returns Promise<LoginResponse> - Login response with tokens and user data
+   * @returns Promise<LoginResponse> - Login response with access token and user data
    */
   static async login(credentials: LoginRequest): Promise<LoginResponse> {
     const loginData = {
@@ -211,7 +178,6 @@ export class AuthService {
 
     // Debug logging
     console.log('🔐 Auth: Attempting login...');
-    console.log('🔐 Auth: Login endpoint:', AUTH_ENDPOINTS.LOGIN);
     console.log('🔐 Auth: Login data:', {
       email: loginData.email,
       networkType: loginData.networkType,
@@ -219,12 +185,27 @@ export class AuthService {
     });
 
     try {
-      const response = await apiRequest<LoginResponse>(AUTH_ENDPOINTS.LOGIN, {
-        method: 'POST',
-        body: JSON.stringify(loginData),
-      });
-
-      console.log('✅ Auth: Login successful');
+      const response = await HttpClient.post<LoginResponse>('/auth/login', loginData);
+      console.log('✅ Auth: Login successful - received access token');
+      console.log('🔑 Auth: Access token received:', response.accessToken ? 'Yes' : 'No');
+      
+      // Check if refresh token cookie was set by backend
+      console.log('🍪 Auth: Checking if refresh token cookie was set...');
+      console.log('🍪 Auth: Current cookies after login:', typeof document !== 'undefined' ? document.cookie : 'server-side');
+      
+      // Parse and log all cookies
+      if (typeof document !== 'undefined' && document.cookie) {
+        const cookies = document.cookie.split(';').map(c => c.trim()).filter(c => c.length > 0);
+        console.log('🍪 Auth: Parsed cookies:', cookies);
+        
+        // Check for refresh token specifically
+        const refreshTokenCookie = cookies.find(c => 
+          c.toLowerCase().includes('refresh') || 
+          c.toLowerCase().includes('token')
+        );
+        console.log('🍪 Auth: Refresh token cookie found:', refreshTokenCookie || 'None');
+      }
+      
       return response;
     } catch (error) {
       console.error('❌ Auth: Login failed:', error);
@@ -241,7 +222,7 @@ export class AuthService {
    * Register a new user
    * 
    * Note: First user becomes admin automatically (no token required).
-   * Subsequent registrations require admin token.
+   * Subsequent registrations require admin access token.
    * 
    * @param userData - User registration data
    * @param adminToken - Admin access token (required for non-first user)
@@ -258,7 +239,7 @@ export class AuthService {
       headers.Authorization = `Bearer ${adminToken}`;
     }
 
-    return apiRequest<RegisterResponse>(AUTH_ENDPOINTS.REGISTER, {
+    return HttpClient.request<RegisterResponse>('/auth/register', {
       method: 'POST',
       headers,
       body: JSON.stringify(userData),
@@ -266,18 +247,36 @@ export class AuthService {
   }
 
   /**
-   * Refresh access token using the HttpOnly refresh token
+   * Refresh access token using the refresh token
    * 
    * @returns Promise<RefreshResponse> - New access token
    */
   static async refreshToken(): Promise<RefreshResponse> {
-    const response = await apiRequest<RefreshResponse>(AUTH_ENDPOINTS.REFRESH, {
-      method: 'POST',
-    });
+    try {
+      console.log('🔄 Auth: Attempting token refresh...');
+      console.log('🔄 Auth: Sending request to /auth/refresh with cookies');
+      console.log('🔄 Auth: Current domain:', typeof window !== 'undefined' ? window.location.origin : 'server-side');
+      console.log('🔄 Auth: Cookies available:', typeof document !== 'undefined' ? document.cookie : 'server-side');
+      
+      const response = await HttpClient.post<RefreshResponse>('/auth/refresh');
 
-    // Access token will be updated by the auth store
-
-    return response;
+      console.log('✅ Auth: Token refresh successful');
+      console.log('🔑 Auth: Received new access token:', response.accessToken ? 'Yes' : 'No');
+      return response;
+    } catch (error) {
+      console.error('❌ Auth: Token refresh failed:', error);
+      
+      // Provide more specific error messages for refresh token failures
+      if (error instanceof AuthApiError) {
+        if (error.statusCode === 401) {
+          throw new AuthApiError('Refresh token expired or invalid', 401, 'REFRESH_TOKEN_EXPIRED');
+        } else if (error.statusCode === 403) {
+          throw new AuthApiError('Refresh token not provided', 403, 'REFRESH_TOKEN_MISSING');
+        }
+      }
+      
+      throw error;
+    }
   }
 
   /**
@@ -288,16 +287,17 @@ export class AuthService {
    */
   static async logout(accessToken: string): Promise<LogoutResponse> {
     try {
-      const response = await apiRequest<LogoutResponse>(AUTH_ENDPOINTS.LOGOUT, {
+      const response = await HttpClient.request<LogoutResponse>('/auth/logout', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       });
-
+      console.log('✅ Auth: Logout successful');
       return response;
     } catch (error) {
-      // Error will be handled by calling code
+      console.error('❌ Auth: Logout error:', error);
+      // Continue with logout even if server call fails
       throw error;
     }
   }
@@ -309,7 +309,7 @@ export class AuthService {
    * @returns Promise<ProfileResponse> - User profile with permissions
    */
   static async getProfile(accessToken: string): Promise<ProfileResponse> {
-    return apiRequest<ProfileResponse>(AUTH_ENDPOINTS.PROFILE, {
+    return HttpClient.request<ProfileResponse>('/auth/profile', {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -320,13 +320,13 @@ export class AuthService {
   /**
    * Make authenticated API request to any endpoint
    * 
-   * @param url - The endpoint URL
+   * @param endpoint - The endpoint path (without base URL)
    * @param options - Fetch options
    * @param accessToken - Current access token
    * @returns Promise with response data
    */
   static async authenticatedRequest<T>(
-    url: string,
+    endpoint: string,
     options: RequestInit = {},
     accessToken?: string
   ): Promise<T> {
@@ -334,13 +334,33 @@ export class AuthService {
       throw new AuthApiError('No access token provided', 401, 'NO_TOKEN');
     }
 
-    return apiRequest<T>(url, {
+    return HttpClient.request<T>(endpoint, {
       ...options,
       headers: {
         Authorization: `Bearer ${accessToken}`,
         ...options.headers,
       },
     });
+  }
+
+  /**
+   * Check if user is authenticated by testing profile endpoint
+   * 
+   * @param accessToken - Current access token
+   * @returns Promise<boolean> - True if user is authenticated
+   */
+  static async isAuthenticated(accessToken: string | null): Promise<boolean> {
+    if (!accessToken) {
+      return false;
+    }
+    
+    try {
+      await this.getProfile(accessToken);
+      return true;
+    } catch (error) {
+      console.log('🔍 Auth: Profile check failed, user not authenticated');
+      return false;
+    }
   }
 
   /**
@@ -363,13 +383,30 @@ export class AuthService {
       return false;
     }
   }
+
+  /**
+   * Test if refresh token is available by attempting a refresh
+   * 
+   * @returns Promise<boolean> - True if refresh token is available and valid
+   */
+  static async hasValidRefreshToken(): Promise<boolean> {
+    try {
+      console.log('🔍 Auth: Testing if refresh token is available...');
+      await this.refreshToken();
+      console.log('✅ Auth: Refresh token is available and valid');
+      return true;
+    } catch (error) {
+      console.log('❌ Auth: Refresh token not available or invalid:', error);
+      return false;
+    }
+  }
 }
 
 /**
- * Automatic token refresh interceptor
+ * Ensure token is valid and refresh if needed
  * 
- * This function can be used to automatically refresh tokens when they expire.
- * It should be called before making API requests.
+ * This function checks if the current token is valid and refreshes it if it's expired.
+ * This is the core function for token management in Zustand.
  */
 export async function ensureValidToken(currentToken: string | null): Promise<string | null> {
   try {
@@ -378,34 +415,16 @@ export async function ensureValidToken(currentToken: string | null): Promise<str
       return null;
     }
 
-    // Check if token is expired or will expire in the next 3 minutes (appropriate for 15-min tokens)
+    // Check if token is expired or will expire in the next 5 minutes
     const payload = JSON.parse(atob(currentToken.split('.')[1]));
     const currentTime = Date.now() / 1000;
-    const bufferTime = 180; // 3 minutes buffer (appropriate for 15-minute token expiration)
+    const bufferTime = 300; // 5 minutes buffer
     
     if (payload.exp <= currentTime + bufferTime) {
-      // Token is expired or will expire soon, refresh it
-      console.log('🔄 Token expiring soon, refreshing...');
-      try {
-        const refreshResponse = await AuthService.refreshToken();
-        console.log('✅ Token refreshed successfully');
-        return refreshResponse.accessToken;
-      } catch (refreshError: any) {
-        console.error('❌ Token refresh failed:', refreshError);
-        
-        // Check if it's a refresh token issue
-        if (refreshError.message?.includes('Refresh token not provided') || 
-            refreshError.message?.includes('refresh') ||
-            refreshError.statusCode === 401) {
-          console.log('🔄 Refresh token expired or invalid, user needs to login again');
-          // Return null to force re-authentication
-          return null;
-        }
-        
-        // For other errors, return the current token
-        console.log('⚠️ Returning current token despite refresh failure');
-        return currentToken;
-      }
+      // Token is expired or will expire soon
+      console.log('⚠️ Token is expired or expiring soon, user needs to login again');
+      console.log('🔄 Refresh token endpoint not available, returning null');
+      return null;
     }
     
     return currentToken;

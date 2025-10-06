@@ -1,6 +1,7 @@
 "use client";
 import SettingsLayout from "../_components/SettingsLayout";
 import React from "react";
+import { useUsersStore } from "../../lib/stores/usersStore";
 
 type SavedUser = {
   id: number;
@@ -12,32 +13,7 @@ type SavedUser = {
 };
 
 export default function UsersSettingsPage() {
-  const [users, setUsers] = React.useState<SavedUser[]>([]);
-
-  const loadUsers = React.useCallback(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem("fhs_users");
-      const data = raw ? JSON.parse(raw) : [];
-      setUsers(Array.isArray(data) ? data : []);
-    } catch {
-      setUsers([]);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    loadUsers();
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "fhs_users") loadUsers();
-    };
-    const onFocus = () => loadUsers();
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("focus", onFocus);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [loadUsers]);
+  const { users } = useUsersStore();
 
   return (
     <SettingsLayout>

@@ -2,27 +2,15 @@
 import SettingsLayout from "../../_components/SettingsLayout";
 import Link from 'next/link'
 import React from 'react'
+import { useSalesChannelsStore } from "../../../lib/stores/salesChannelsStore"
 
 type SavedChannel = { id: string; provider: string; nickname: string; region: string; fba?: boolean }
 
 export default function YourSalesChannelsPage() {
-  const [channels, setChannels] = React.useState<SavedChannel[]>([])
-
-  React.useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem('salesChannels')
-      setChannels(raw ? JSON.parse(raw) : [])
-    } catch {
-      setChannels([])
-    }
-  }, [])
+  const { channels, removeChannel } = useSalesChannelsStore()
 
   const remove = (id: string) => {
-    setChannels(prev => {
-      const next = prev.filter(c => c.id !== id)
-      window.localStorage.setItem('salesChannels', JSON.stringify(next))
-      return next
-    })
+    removeChannel(id)
   }
 
   return (

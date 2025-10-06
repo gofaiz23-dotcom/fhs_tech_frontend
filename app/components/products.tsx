@@ -41,23 +41,23 @@ const Toolbar = ({
 }) => {
 	return (
 		<div className="flex items-center gap-2">
-			<button className="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-2 rounded">List Products on Channel</button>
+			<button className="btn-success text-sm px-3 py-2">List Products on Channel</button>
 			<button
-				className={`bg-gray-100 text-gray-800 text-sm px-3 py-2 rounded border ${selectedCount === 0 ? 'opacity-60 cursor-not-allowed' : 'hover:bg-gray-200'}`}
+				className={`btn-secondary text-sm px-3 py-2 ${selectedCount === 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
 				onClick={onCategorize}
 				disabled={selectedCount === 0}
 			>
 				Categorize
 			</button>
 			<button
-				className={`bg-gray-100 text-gray-800 text-sm px-3 py-2 rounded border ${selectedCount === 0 ? 'opacity-60 cursor-not-allowed' : 'hover:bg-gray-200'}`}
+				className={`btn-secondary text-sm px-3 py-2 ${selectedCount === 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
 				onClick={onAddTags}
 				disabled={selectedCount === 0}
 			>
 				Add Tags
 			</button>
 			<button
-				className={`bg-gray-100 text-gray-800 text-sm px-3 py-2 rounded border ${selectedCount === 0 ? 'opacity-60 cursor-not-allowed' : 'hover:bg-gray-200'}`}
+				className={`btn-danger text-sm px-3 py-2 ${selectedCount === 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
 				onClick={onDelete}
 				disabled={selectedCount === 0}
 			>
@@ -97,7 +97,7 @@ const Filters = ({ searchQuery, onSearchChange, listedFilter, onChangeListed }: 
 				</label>
 			</div>
 			<div className="flex items-center gap-2">
-				<button className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm px-3 py-2 rounded border">Apply Filter</button>
+				<button className="btn-secondary text-sm px-3 py-2">Apply Filter</button>
 				<button className="text-blue-600 text-sm">Clear Filter</button>
 			</div>
 		</aside>
@@ -287,7 +287,7 @@ const Products = () => {
 								<input className="w-full border rounded px-3 py-2 text-sm" placeholder="Enter category" value={newCategory} onChange={(e)=>setNewCategory(e.target.value)} />
 								<div className="flex justify-end gap-2 pt-2">
 									<button className="px-3 py-2 text-sm border rounded" onClick={()=>{setShowCategoryModal(false); setNewCategory('')}}>Cancel</button>
-									<button className="px-3 py-2 text-sm bg-purple-600 text-white rounded" onClick={()=>{
+									<button className="btn-accent text-sm px-3 py-2" onClick={()=>{
 										if(!newCategory.trim()) return;
 										setProducts(prev => prev.map(p => selectedIds.has(p.id) ? { ...p, category: newCategory.trim() } : p));
 										setShowCategoryModal(false); setNewCategory('');
@@ -305,7 +305,7 @@ const Products = () => {
 								<input className="w-full border rounded px-3 py-2 text-sm" placeholder="Comma separated tags (e.g. new,summer)" value={newTags} onChange={(e)=>setNewTags(e.target.value)} />
 								<div className="flex justify-end gap-2 pt-2">
 									<button className="px-3 py-2 text-sm border rounded" onClick={()=>{setShowTagsModal(false); setNewTags('')}}>Cancel</button>
-									<button className="px-3 py-2 text-sm bg-purple-600 text-white rounded" onClick={()=>{
+									<button className="btn-accent text-sm px-3 py-2" onClick={()=>{
 										const tags = newTags.split(',').map(t=>t.trim()).filter(Boolean);
 										if(tags.length===0) return;
 										setProducts(prev => prev.map(p => selectedIds.has(p.id) ? { ...p, tags: Array.from(new Set([...(p.tags||[]), ...tags])) } : p));

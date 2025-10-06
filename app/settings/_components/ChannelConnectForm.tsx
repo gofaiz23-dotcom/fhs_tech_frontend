@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import React from 'react'
+import { useSalesChannelsStore } from '../../lib/stores/salesChannelsStore'
 
 export type ChannelOption = {
   label: string
@@ -17,6 +18,7 @@ export default function ChannelConnectForm({
   regions: ChannelOption[]
   showFbaToggle?: boolean
 }) {
+  const { addChannel } = useSalesChannelsStore();
   const router = useRouter()
   const [nickname, setNickname] = React.useState('')
   const [region, setRegion] = React.useState(regions[0]?.value || '')
@@ -52,14 +54,14 @@ export default function ChannelConnectForm({
           <button
             className="bg-white border rounded px-4 py-3 flex items-center gap-3 shadow-sm"
             onClick={() => {
-              const payload = { id: `${channelName}-${Date.now()}`, provider: channelName.toLowerCase(), nickname: nickname || `${channelName} Store`, region, fba }
-              try {
-                const raw = typeof window !== 'undefined' ? window.localStorage.getItem('salesChannels') : null
-                const list = raw ? JSON.parse(raw) : []
-                list.push(payload)
-                window.localStorage.setItem('salesChannels', JSON.stringify(list))
-              } catch {}
-              router.push('/settings/channels/your')
+              const channelData = {
+                provider: channelName.toLowerCase(),
+                nickname: nickname || `${channelName} Store`,
+                region,
+                fba
+              };
+              addChannel(channelData);
+              router.push('/settings/channels/your');
             }}
           >
             <span className="w-6 h-6 rounded bg-purple-100 text-purple-700 flex items-center justify-center">{channelName[0]}</span>

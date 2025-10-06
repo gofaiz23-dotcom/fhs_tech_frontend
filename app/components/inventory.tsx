@@ -175,7 +175,7 @@ export default function Inventory() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm px-3 py-2 rounded border" onClick={()=>{ /* filters auto-apply */ }}>Apply filter</button>
+            <button className="btn-secondary text-sm px-3 py-2" onClick={()=>{ /* filters auto-apply */ }}>Apply filter</button>
             <button className="text-blue-600 text-sm" onClick={()=>{setSearch(''); setTagQuery(''); setCondition('all'); setCategory('All Categories'); setInvFilter('available'); setQtyMin(''); setQtyMax(''); setPage(1)}}>Clear filter</button>
           </div>
         </aside>
@@ -185,16 +185,16 @@ export default function Inventory() {
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-semibold text-gray-800">Inventory</h1>
             <div className="flex items-center gap-2">
-              <button className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm px-3 py-2 rounded border">Import from CSV</button>
-              <button className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm px-3 py-2 rounded border">Manage locations</button>
-              <button className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm px-3 py-2 rounded border">Export</button>
+              <button className="btn-secondary text-sm px-3 py-2">Import from CSV</button>
+              <button className="btn-secondary text-sm px-3 py-2">Manage locations</button>
+              <button className="btn-secondary text-sm px-3 py-2">Export</button>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <button className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm px-3 py-2 rounded border">Categorize</button>
-            <button className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm px-3 py-2 rounded border">Add to Warehouse ▾</button>
-            <button className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm px-3 py-2 rounded border">Bulk editor</button>
+            <button className="btn-secondary text-sm px-3 py-2">Categorize</button>
+            <button className="btn-secondary text-sm px-3 py-2">Add to Warehouse ▾</button>
+            <button className="btn-secondary text-sm px-3 py-2">Bulk editor</button>
           </div>
 
           <div className="overflow-x-auto bg-white border rounded">

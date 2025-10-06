@@ -5,6 +5,7 @@ import AppShell from "./components/AppShell";
 import { WarehouseProvider } from "./components/warehouses/WarehouseProvider";
 import { AuthProvider } from "./lib/auth/context";
 import { SidebarProvider } from "./components/SidebarContext";
+import { ThemeProvider } from "./components/theme-provider";
 // import '../styles/globals.css';
 
 
@@ -29,17 +30,24 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <AuthProvider>
-          <SidebarProvider>
-            <WarehouseProvider>
-              <AppShell>
-                {children}
-              </AppShell>
-            </WarehouseProvider>
-          </SidebarProvider>
-        </AuthProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthProvider>
+            <SidebarProvider>
+              <WarehouseProvider>
+                <AppShell>
+                  {children}
+                </AppShell>
+              </WarehouseProvider>
+            </SidebarProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

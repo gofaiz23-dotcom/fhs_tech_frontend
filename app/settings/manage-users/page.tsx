@@ -1,12 +1,15 @@
 "use client";
 import SettingsLayout from "../_components/SettingsLayout";
 import React from "react";
-import { Pencil, Trash2, Eye, AlertCircle, Loader2, RefreshCw, Search } from "lucide-react";
+import { Pencil, Trash2, Eye, EyeOff, AlertCircle, Loader2, RefreshCw, Search, CheckCircle } from "lucide-react";
 import { AdminService, AdminUtils } from "../../lib/admin";
 import { useAuth, AuthService } from "../../lib/auth";
 import type { DetailedUser } from "../../lib/admin/types";
 import AppleToggle from "../../components/AppleToggle";
 import { AccessControlService, type Brand, type Marketplace, type ShippingPlatform } from "../../lib/access-control";
+import { activityLogger } from "../../lib/activity-logger";
+import DeleteUserModal from "../../components/DeleteUserModal";
+import { validatePassword, getPasswordStrengthColor, getPasswordStrengthText } from "../../lib/utils/passwordValidation";
 // import { usePermissionsStore } from "../../lib/stores/permissionsStore"; // No longer needed
 
 type PermissionItem = { name: string; enabled: boolean };
@@ -46,6 +49,7 @@ export default function ManageUsersPage() {
   const [users, setUsers] = React.useState<DetailedUser[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
 
   // UI state
   const [open, setOpen] = React.useState(false);
@@ -56,6 +60,12 @@ export default function ManageUsersPage() {
     password: "", 
     role: 'USER' as 'USER' | 'ADMIN' 
   });
+  
+  // Password validation state
+  const [passwordValidation, setPasswordValidation] = React.useState(validatePassword(""));
+  const [showPasswordValidation, setShowPasswordValidation] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
+  
   const [showAccessFor, setShowAccessFor] = React.useState<DetailedUser | null>(null);
   const [confirmDelete, setConfirmDelete] = React.useState<DetailedUser | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -74,6 +84,11 @@ export default function ManageUsersPage() {
 
   // Search state
   const [searchTerm, setSearchTerm] = React.useState('');
+
+  // Delete user state
+  const [showDeleteModal, setShowDeleteModal] = React.useState(false);
+  const [userToDelete, setUserToDelete] = React.useState<DetailedUser | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   // Mock data removed - now using actual API data
 
@@ -118,7 +133,10 @@ export default function ManageUsersPage() {
       setError(null);
       
       const response = await AdminService.getAllUsersWithAccess(authState.accessToken);
+      console.log('🔍 Load Users: API response:', response);
+      console.log('🔍 Load Users: Users count:', response.users?.length);
       setUsers(response.users);
+      console.log('🔍 Load Users: Users state updated');
     } catch (error: any) {
       console.error('Failed to load users:', error);
       setError(error.message || 'Failed to load users');
@@ -166,6 +184,12 @@ export default function ManageUsersPage() {
     }
   }, [loadUsers, loadAvailableItems, authState.isAuthenticated, authState.accessToken, authState.isLoading]);
 
+  // Validate password on change
+  React.useEffect(() => {
+    const validation = validatePassword(form.password);
+    setPasswordValidation(validation);
+  }, [form.password]);
+
   /**
    * Handle user registration (only for creating new users)
    */
@@ -176,11 +200,28 @@ export default function ManageUsersPage() {
     
     setIsSubmitting(true);
     setError(null);
+    setSuccessMessage(null);
 
     try {
       if (isEditing) {
+        console.log('🔍 Form: Starting user update...');
+        console.log('🔍 Form: Current form data:', form);
+        console.log('🔍 Form: isSubmitting state:', isSubmitting);
+        
         // Handle updates via separate functions
         await handleUpdateUser();
+        
+        // Check if username was in the form but might have been skipped
+        const currentUser = users.find(u => u.id === isEditing);
+        if (currentUser && getDisplayUsername(currentUser) !== form.username) {
+          setSuccessMessage('User updated successfully! (Note: Username update may not be available yet)');
+        } else {
+          setSuccessMessage('User updated successfully!');
+        }
+        console.log('✅ Form: User update completed');
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccessMessage(null), 3000);
       } else {
         // Validate required fields for new user
         if (!form.username.trim()) {
@@ -212,7 +253,12 @@ export default function ManageUsersPage() {
         
         // Reset form
         setForm({ username: "", email: "", password: "", role: 'USER' });
+        setShowPassword(false);
         setOpen(false);
+        setSuccessMessage('User created successfully!');
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccessMessage(null), 3000);
       }
     } catch (error: any) {
       console.error('Failed to register user:', error);
@@ -230,40 +276,114 @@ export default function ManageUsersPage() {
 
     try {
       const currentUser = users.find(u => u.id === isEditing);
+      console.log('🔍 Update User: Starting update for user ID:', isEditing);
+      console.log('🔍 Update User: Current user:', currentUser);
+      console.log('🔍 Update User: Form data:', form);
       
+      const changes: { field: string; oldValue: any; newValue: any }[] = [];
+      const adminUser = { email: authState.user?.email || 'unknown', username: authState.user?.username };
+
       // Update username if changed
-      if (currentUser && getDisplayUsername(currentUser) !== form.username) {
-        // Note: Username update would need a separate API endpoint
-        console.log('Username update requested:', form.username);
-        // await AdminService.updateUsername(isEditing, form.username, authState.accessToken);
+      if (!currentUser) {
+        console.error('❌ Update User: Current user not found');
+        setError('User not found');
+        return;
+      }
+      
+      const currentUsername = getDisplayUsername(currentUser);
+      console.log('🔍 Update User: Current username:', currentUsername);
+      console.log('🔍 Update User: Form username:', form.username);
+      console.log('🔍 Update User: Username changed?', currentUsername !== form.username);
+      
+      if (currentUsername !== form.username) {
+        console.log('🔍 Update User: Username update requested:', form.username);
+        changes.push({ field: 'username', oldValue: currentUsername, newValue: form.username });
+        
+        try {
+          await AdminService.updateUsername(isEditing, form.username, authState.accessToken);
+          console.log('✅ Update User: Username updated successfully');
+        } catch (usernameError: any) {
+          console.error('❌ Username update failed:', usernameError);
+          
+          // Check if it's a 404 error (endpoint not implemented) or network error
+          if (usernameError.statusCode === 404 || 
+              usernameError.message?.includes('404') || 
+              usernameError.message?.includes('Not Found') ||
+              usernameError.message?.includes('Network error') ||
+              usernameError.status === 404) {
+            console.log('⚠️ Username update endpoint not implemented yet, skipping...');
+            // Remove username from changes since it failed
+            changes.pop();
+          } else {
+            setError(`Failed to update username: ${usernameError.message || 'Unknown error'}`);
+            throw usernameError; // Re-throw to stop the update process
+          }
+        }
       }
 
       // Update email if changed
-      if (currentUser && currentUser.email !== form.email) {
+      if (currentUser.email !== form.email) {
+        console.log('🔍 Update User: Updating email from', currentUser.email, 'to', form.email);
+        changes.push({ field: 'email', oldValue: currentUser.email, newValue: form.email });
         await AdminService.updateUserEmail(isEditing, form.email, authState.accessToken);
+        console.log('✅ Update User: Email updated successfully');
       }
 
       // Update password if provided
       if (form.password && form.password !== '••••••••') {
+        console.log('🔍 Update User: Updating password');
+        changes.push({ field: 'password', oldValue: '••••••••', newValue: '••••••••' });
         await AdminService.updateUserPassword(isEditing, form.password, authState.accessToken);
+        console.log('✅ Update User: Password updated successfully');
       }
 
       // Update role if changed
-      if (currentUser && currentUser.role !== form.role) {
+      if (currentUser.role !== form.role) {
+        console.log('🔍 Update User: Updating role from', currentUser.role, 'to', form.role);
+        changes.push({ field: 'role', oldValue: currentUser.role, newValue: form.role });
         await AdminService.updateUserRole(isEditing, form.role, authState.accessToken);
+        console.log('✅ Update User: Role updated successfully');
+      }
+
+      // Log the activity if there were changes
+      if (changes.length > 0) {
+        activityLogger.logUserEdit(
+          currentUser.email,
+          getDisplayUsername(currentUser),
+          changes,
+          adminUser
+        );
+      }
+
+      // Show warning if username update was skipped
+      if (currentUsername !== form.username && changes.length === 0) {
+        console.log('⚠️ No changes were made - username update was skipped');
+        setSuccessMessage('User updated successfully! (Note: Username update was skipped - endpoint may not be available)');
+      } else if (currentUsername !== form.username && changes.length > 0) {
+        console.log('⚠️ Username update was skipped, but other changes were made');
+        setSuccessMessage('User updated successfully! (Note: Username update was skipped - endpoint may not be available)');
       }
 
       // Reload users to get updated data
+      console.log('🔄 Update User: Reloading users...');
       await loadUsers();
+      console.log('✅ Update User: Users reloaded successfully');
       
       // Reset form
+      console.log('🔍 Update User: Resetting form and closing modal...');
       setForm({ username: "", email: "", password: "", role: 'USER' });
+      setShowPassword(false);
       setIsEditing(null);
       setOpen(false);
+      console.log('🔍 Update User: Form reset and modal closed');
+      
+      console.log('✅ Update User: All updates completed successfully');
     } catch (error: any) {
       console.error('Failed to update user:', error);
       setError(error.message || 'Failed to update user');
       throw error;
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -272,14 +392,43 @@ export default function ManageUsersPage() {
    */
   const handleDeleteUser = async (user: DetailedUser) => {
     try {
-      // Note: The API documentation doesn't include a delete endpoint
-      // This would need to be implemented on the backend
-      console.warn('Delete user functionality not available in current API');
-      setError('Delete functionality not available. Please contact system administrator.');
+      console.log('🗑️ Deleting user:', user.email);
+
+      if (!authState.accessToken) {
+        setError('Authentication required to delete user');
+        return;
+      }
+
+      // Call delete API
+      await AdminService.deleteUser(user.id, authState.accessToken);
+      
+      // Log the deletion activity
+      const adminUser = { 
+        email: authState.user?.email || 'unknown', 
+        username: authState.user?.username || 'unknown' 
+      };
+      
+      activityLogger.logUserEdit(
+        user.email,
+        getDisplayUsername(user),
+        [{ field: 'account', oldValue: 'active', newValue: 'deleted' }],
+        adminUser
+      );
+
+      // Remove user from local state
+      setUsers(prev => prev.filter(u => u.id !== user.id));
+      
+      // Close confirmation and reset state
       setConfirmDelete(null);
+      
+      // Show success message
+      setSuccessMessage(`User ${user.email} has been deleted successfully`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+      
+      console.log('✅ User deleted successfully');
     } catch (error: any) {
-      console.error('Failed to delete user:', error);
-      setError(error.message || 'Failed to delete user');
+      console.error('❌ Failed to delete user:', error);
+      setError(`Failed to delete user: ${error.message || 'Unknown error'}`);
     }
   };
 
@@ -314,6 +463,12 @@ export default function ManageUsersPage() {
     
     try {
       console.log('Calling toggleBrandAccess...');
+      
+      // Get current state before toggle
+      const currentState = brandAccess[brandId];
+      const brand = availableBrands.find(b => b.id === brandId);
+      const brandName = brand?.name || `Brand ${brandId}`;
+      
       // @ts-ignore - Temporary workaround for TypeScript issue
       await AdminService.toggleBrandAccess(userId, brandId, authState.accessToken);
       
@@ -322,6 +477,16 @@ export default function ManageUsersPage() {
         ...prev,
         [brandId]: !prev[brandId]
       }));
+      
+      // Log the activity
+      const adminUser = { email: authState.user?.email || 'unknown', username: authState.user?.username };
+      activityLogger.logPermissionChange(
+        showAccessFor.email,
+        'brand',
+        brandName,
+        !currentState ? 'granted' : 'revoked',
+        adminUser
+      );
       
       // Reload users to get updated data
       await loadUsers();
@@ -343,6 +508,11 @@ export default function ManageUsersPage() {
     setIsToggling(prev => ({ ...prev, [toggleKey]: true }));
     
     try {
+      // Get current state before toggle
+      const currentState = marketplaceAccess[marketplaceId];
+      const marketplace = availableMarketplaces.find(m => m.id === marketplaceId);
+      const marketplaceName = marketplace?.name || `Marketplace ${marketplaceId}`;
+      
       // @ts-ignore - Temporary workaround for TypeScript issue
       await AdminService.toggleMarketplaceAccess(userId, marketplaceId, authState.accessToken);
       
@@ -351,6 +521,16 @@ export default function ManageUsersPage() {
         ...prev,
         [marketplaceId]: !prev[marketplaceId]
       }));
+      
+      // Log the activity
+      const adminUser = { email: authState.user?.email || 'unknown', username: authState.user?.username };
+      activityLogger.logPermissionChange(
+        showAccessFor.email,
+        'marketplace',
+        marketplaceName,
+        !currentState ? 'granted' : 'revoked',
+        adminUser
+      );
       
       // Reload users to get updated data
       await loadUsers();
@@ -372,6 +552,11 @@ export default function ManageUsersPage() {
     setIsToggling(prev => ({ ...prev, [toggleKey]: true }));
     
     try {
+      // Get current state before toggle
+      const currentState = shippingAccess[shippingId];
+      const shipping = availableShipping.find(s => s.id === shippingId);
+      const shippingName = shipping?.name || `Shipping ${shippingId}`;
+      
       // @ts-ignore - Temporary workaround for TypeScript issue
       await AdminService.toggleShippingAccess(userId, shippingId, authState.accessToken);
       
@@ -380,6 +565,16 @@ export default function ManageUsersPage() {
         ...prev,
         [shippingId]: !prev[shippingId]
       }));
+      
+      // Log the activity
+      const adminUser = { email: authState.user?.email || 'unknown', username: authState.user?.username };
+      activityLogger.logPermissionChange(
+        showAccessFor.email,
+        'shipping',
+        shippingName,
+        !currentState ? 'granted' : 'revoked',
+        adminUser
+      );
       
       // Reload users to get updated data
       await loadUsers();
@@ -436,7 +631,7 @@ export default function ManageUsersPage() {
             <button
               onClick={loadUsers}
               disabled={isLoading}
-              className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+              className="btn-ghost text-sm flex items-center gap-2 disabled:opacity-50"
               title="Refresh users"
             >
               <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
@@ -444,7 +639,7 @@ export default function ManageUsersPage() {
             </button>
             <button 
               onClick={() => setOpen(true)} 
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded"
+              className="btn-primary text-sm px-4 py-2"
               disabled={isLoading}
             >
               Create New User
@@ -483,37 +678,56 @@ export default function ManageUsersPage() {
           </div>
         )}
 
+        {/* Success Message */}
+        {successMessage && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+            <CheckCircle size={20} className="text-green-500 flex-shrink-0" />
+            <div>
+              <div className="text-green-800 font-medium">Success</div>
+              <div className="text-green-700 text-sm">{successMessage}</div>
+            </div>
+            <button
+              onClick={() => setSuccessMessage(null)}
+              className="ml-auto text-green-500 hover:text-green-700"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {/* Loading State */}
         {isLoading ? (
-          <div className="bg-white border rounded p-8 text-center">
-            <Loader2 size={32} className="animate-spin mx-auto mb-4 text-blue-600" />
-            <div className="text-gray-600">Loading users...</div>
+          <div className="card p-8 text-center">
+            <Loader2 size={32} className="animate-spin mx-auto mb-4 text-primary-600" />
+            <div className="text-secondary-600">Loading users...</div>
           </div>
         ) : (
-          <div className="bg-white border rounded p-0 overflow-x-auto">
+          <div className="card overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-600 border-b">
-                <th className="py-3 px-4">Name</th>
-                <th className="py-3 px-4">Email</th>
-                <th className="py-3 px-4">Action</th>
-              </tr>
-            </thead>
+              <thead>
+                <tr className="text-left text-secondary-600 border-b bg-secondary-50">
+                  <th className="py-3 px-4">Name</th>
+                  <th className="py-3 px-4">Email</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Action</th>
+                </tr>
+              </thead>
             <tbody>
               {filteredUsers.map(user => (
-                <tr key={user.id} className="border-b last:border-b-0">
+                <tr key={user.id} className="border-b last:border-b-0 hover:bg-secondary-50">
                   <td className="py-3 px-4 flex items-center gap-3">
                     <div className="relative">
                       <span className={`h-8 w-8 rounded-full ${getAvatarClass(user.id)}`}></span>
                       {/* Online status indicator */}
-                      {user.loginStats?.currentSession?.isActive && (
-                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
-                      )}
+                      {/* {user.loginStats?.currentSession?.isActive && (
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2  border-white rounded-full"></div>
+                      )} */}
                     </div>
                     <div>
                       <div className="font-medium">{getDisplayUsername(user)}</div>
                       <div className="text-xs text-gray-500 flex items-center gap-2">
-                        <span className={`inline-block w-2 h-2 rounded-full ${user.role === 'ADMIN' ? 'bg-purple-500' : 'bg-blue-500'}`}></span>
+                        {/* <span className={`inline-block w-2 h-2 rounded-full `}></span> */}
+                        {/* <span className={`inline-block w-2 h-2 rounded-full ${user.role === 'ADMIN' ? 'bg-purple-500' : 'bg-blue-500'}`}></span> */}
                         {user.role}
                       </div>
                     </div>
@@ -524,6 +738,13 @@ export default function ManageUsersPage() {
                       <div className="text-xs text-gray-500">
                         Last login: {AdminUtils.formatRelativeTime(user.loginStats.lastLogin)}
                       </div>
+                    )}
+                  </td>
+                  <td className="py-3 px-4">
+                    {user.loginStats?.currentSession?.isActive ? (
+                      <span className="text-green-600 animate-pulse text-sm font-medium">Active</span>
+                    ) : (
+                      <span className="text-gray-500 text-sm">Offline</span>
                     )}
                   </td>
                   <td className="py-3 px-4">
@@ -541,8 +762,11 @@ export default function ManageUsersPage() {
                         aria-label="Edit" 
                         onClick={() => { 
                           setIsEditing(user.id); 
+                          console.log('🔍 Edit User: User data:', user);
+                          console.log('🔍 Edit User: Username field:', user.username);
+                          console.log('🔍 Edit User: Display username:', getDisplayUsername(user));
                           setForm({ 
-                            username: getDisplayUsername(user), 
+                            username: user.username || user.email.split('@')[0], 
                             email: user.email, 
                             password: '••••••••', 
                             role: user.role 
@@ -557,7 +781,10 @@ export default function ManageUsersPage() {
                       <button 
                         title="Delete" 
                         aria-label="Delete" 
-                        onClick={() => setConfirmDelete(user)} 
+                        onClick={() => {
+                          setUserToDelete(user);
+                          setShowDeleteModal(true);
+                        }} 
                         className="inline-flex items-center justify-center border rounded p-1 text-xs hover:bg-red-50 text-red-600"
                       >
                         <Trash2 size={14} />
@@ -568,7 +795,7 @@ export default function ManageUsersPage() {
               ))}
               {filteredUsers.length === 0 && (
                 <tr>
-                  <td className="py-8 px-4 text-center text-gray-600" colSpan={3}>
+                  <td className="py-8 px-4 text-center text-gray-600" colSpan={4}>
                     {searchTerm 
                       ? 'No users match your search criteria.' 
                       : authState.user?.role === 'ADMIN' 
@@ -585,7 +812,7 @@ export default function ManageUsersPage() {
 
         {open && (
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-            <form onSubmit={handleRegister} className="bg-white rounded shadow-lg p-6 w-full max-w-md space-y-4">
+            <form onSubmit={handleRegister} className="card p-6 w-full max-w-md space-y-4">
               <div className="text-lg font-semibold text-gray-800">{isEditing ? 'Edit User' : 'Create New User'}</div>
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded p-3 flex items-center gap-2">
@@ -622,17 +849,56 @@ export default function ManageUsersPage() {
               </div>
               <div>
                 <label className="text-xs text-gray-600">Password</label>
-                <input 
-                  type="password" 
-                  value={form.password} 
-                  onChange={(e)=>setForm({...form, password: e.target.value})} 
-                  className="mt-1 w-full border rounded px-3 py-2 text-sm" 
-                  placeholder={isEditing ? "Leave blank to keep current password" : "Enter password"}
-                  required={!isEditing}
-                  disabled={isSubmitting}
-                />
+                <div className="relative">
+                  <input 
+                    type={showPassword ? 'text' : 'password'} 
+                    value={form.password} 
+                    onChange={(e)=>setForm({...form, password: e.target.value})} 
+                    onFocus={() => setShowPasswordValidation(true)}
+                    onBlur={() => setShowPasswordValidation(false)}
+                    className={`mt-1 w-full border rounded px-3 py-2 pr-10 text-sm ${
+                      form.password && !passwordValidation.isValid ? 'border-red-400 focus:border-red-400' : 
+                      form.password && passwordValidation.isValid ? 'border-green-400 focus:border-green-400' : 
+                      'border-gray-300 focus:border-blue-400'
+                    }`}
+                    placeholder={isEditing ? "Leave blank to keep current password" : "Enter password"}
+                    required={!isEditing}
+                    disabled={isSubmitting}
+                  />
+                  <button 
+                    type="button" 
+                    aria-label="toggle password visibility" 
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50" 
+                    onClick={() => setShowPassword(!showPassword)}
+                    disabled={isSubmitting}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
                 {isEditing && (
                   <div className="text-xs text-gray-500 mt-1">Leave blank to keep current password</div>
+                )}
+                
+                {/* Password validation feedback */}
+                {showPasswordValidation && form.password && (
+                  <div className="mt-2 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-600">Password strength:</span>
+                      <span className={`text-xs font-medium ${getPasswordStrengthColor(passwordValidation.strength)}`}>
+                        {getPasswordStrengthText(passwordValidation.strength)}
+                      </span>
+                    </div>
+                    {passwordValidation.errors.length > 0 && (
+                      <div className="space-y-1">
+                        {passwordValidation.errors.map((error, index) => (
+                          <div key={index} className="text-xs text-red-500 flex items-center gap-1">
+                            <span className="text-red-400">•</span>
+                            {error}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
               <div>
@@ -658,6 +924,7 @@ export default function ManageUsersPage() {
                     setIsEditing(null); 
                     setError(null);
                     setForm({ username: "", email: "", password: "", role: 'USER' });
+                    setShowPassword(false);
                   }} 
                   className="border text-sm px-4 py-2 rounded"
                   disabled={isSubmitting}
@@ -666,8 +933,8 @@ export default function ManageUsersPage() {
                 </button>
                 <button 
                   type="submit" 
-                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm px-4 py-2 rounded flex items-center gap-2"
-                  disabled={isSubmitting || !form.email}
+                  className="btn-primary text-sm px-4 py-2 flex items-center gap-2 disabled:opacity-50"
+                  disabled={isSubmitting || !form.email || (!!form.password && !passwordValidation.isValid)}
                 >
                   {isSubmitting && <Loader2 size={16} className="animate-spin" />}
                   {isSubmitting ? 'Processing...' : (isEditing ? 'Update User' : 'Create User')}
@@ -679,7 +946,7 @@ export default function ManageUsersPage() {
 
         {showAccessFor && (
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-            <div className="bg-white rounded shadow-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="card p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-6">
                 <div className="text-lg font-semibold text-gray-800">View Access - {getDisplayUsername(showAccessFor)}</div>
                 <button className="text-gray-400 hover:text-red-500 transition-colors" onClick={()=>setShowAccessFor(null)}>
@@ -848,7 +1115,7 @@ export default function ManageUsersPage() {
               <div className="flex justify-end mt-6">
                 <button 
                   onClick={() => setShowAccessFor(null)}
-                  className="bg-gray-600 hover:bg-gray-700 text-white text-sm px-4 py-2 rounded"
+                  className="btn-secondary text-sm px-4 py-2"
                 >
                   Close
                 </button>
@@ -859,7 +1126,7 @@ export default function ManageUsersPage() {
 
         {confirmDelete && (
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-            <div className="bg-white rounded shadow-lg p-6 w-full max-w-md">
+            <div className="card p-6 w-full max-w-md">
               <div className="text-lg font-semibold text-gray-800 mb-2">Delete User</div>
               <div className="text-gray-600 mb-4">
                 Are you sure you want to delete user "{getDisplayUsername(confirmDelete)}"? 
@@ -875,7 +1142,7 @@ export default function ManageUsersPage() {
                   Cancel
                 </button>
                 <button 
-                  className="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 rounded" 
+                  className="btn-danger text-sm px-4 py-2" 
                   onClick={() => handleDeleteUser(confirmDelete)}
                 >
                   Delete
@@ -884,6 +1151,22 @@ export default function ManageUsersPage() {
             </div>
           </div>
         )}
+
+        {/* Delete User Modal */}
+        <DeleteUserModal
+          isOpen={showDeleteModal}
+          onClose={() => {
+            setShowDeleteModal(false);
+            setUserToDelete(null);
+          }}
+          onConfirm={() => {
+            if (userToDelete) {
+              handleDeleteUser(userToDelete);
+            }
+          }}
+          user={userToDelete}
+          isDeleting={isDeleting}
+        />
       </div>
     </SettingsLayout>
   );
