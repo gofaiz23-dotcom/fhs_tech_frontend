@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
 import { useAuth } from "../lib/auth/context";
 import { AuthApiError } from "../lib/auth/api";
+import { validatePassword, getPasswordStrengthColor, getPasswordStrengthText } from "../lib/utils/passwordValidation";
 
 export default function LoginPage() {
   // Authentication context and router
@@ -17,6 +18,10 @@ export default function LoginPage() {
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  
+  // Password validation state
+  const [passwordValidation, setPasswordValidation] = React.useState(validatePassword(""));
+  const [showPasswordValidation, setShowPasswordValidation] = React.useState(false);
 
   // Redirect if already authenticated
   React.useEffect(() => {
@@ -31,6 +36,12 @@ export default function LoginPage() {
       clearError();
     }
   }, [email, password, clearError]);
+
+  // Validate password on change
+  React.useEffect(() => {
+    const validation = validatePassword(password);
+    setPasswordValidation(validation);
+  }, [password]);
 
   /**
    * Handle form submission
@@ -119,7 +130,11 @@ export default function LoginPage() {
                   type={showPassword ? 'text' : 'password'} 
                   value={password} 
                   onChange={(e) => setPassword(e.target.value)} 
-                  className="mt-1 w-full border border-white/20 bg-white/10 text-white placeholder-white/60 rounded px-3 py-2 pr-10 text-sm focus:outline-none focus:border-blue-400 transition-colors" 
+                  onFocus={() => setShowPasswordValidation(true)}
+                  onBlur={() => setShowPasswordValidation(false)}
+                  className={`mt-1 w-full border bg-white/10 text-white placeholder-white/60 rounded px-3 py-2 pr-10 text-sm focus:outline-none transition-colors ${
+                    passwordValidation.isValid ? 'border-green-400 focus:border-green-400' : 'border-red-400 focus:border-red-400'
+                  }`}
                   placeholder="••••••••" 
                   required 
                   disabled={isSubmitting}
@@ -135,6 +150,28 @@ export default function LoginPage() {
                   {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
                 </button>
               </div>
+              
+              {/* Password validation feedback */}
+              {showPasswordValidation && password && (
+                <div className="mt-2 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-white/70">Password strength:</span>
+                    <span className={`text-xs font-medium ${getPasswordStrengthColor(passwordValidation.strength)}`}>
+                      {getPasswordStrengthText(passwordValidation.strength)}
+                    </span>
+                  </div>
+                  {passwordValidation.errors.length > 0 && (
+                    <div className="space-y-1">
+                      {passwordValidation.errors.map((error, index) => (
+                        <div key={index} className="text-xs text-red-300 flex items-center gap-1">
+                          <span className="text-red-400">•</span>
+                          {error}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             {/* <div className="flex items-center justify-between text-xs">
               <label className="flex items-center gap-2 text-white/80">
@@ -145,8 +182,8 @@ export default function LoginPage() {
             </div> */}
             <button 
               type="submit" 
-              className="w-full bg-blue-600/90 hover:bg-blue-700 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white py-2 rounded text-sm transition-colors flex items-center justify-center gap-2"
-              disabled={isSubmitting || !email.trim() || !password.trim()}
+              className="w-full btn-primary py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSubmitting || !email.trim() || !password.trim() || !passwordValidation.isValid}
             >
               {isSubmitting && <Loader2 size={16} className="animate-spin" />}
               {isSubmitting ? 'Logging in...' : 'Log In'}

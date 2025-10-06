@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
 export interface PermissionItem {
   id: number;
@@ -30,64 +29,64 @@ interface PermissionsStore {
   resetUserPermissions: (userId: string) => void;
 }
 
-export const usePermissionsStore = create<PermissionsStore>()(
-  persist(
-    (set, get) => ({
-      userPermissions: {},
+/**
+ * Permissions store without persistence
+ * 
+ * Uses in-memory state management only. No localStorage persistence.
+ * Permissions data is maintained during the session only and should
+ * be fetched fresh from the server when needed.
+ */
+export const usePermissionsStore = create<PermissionsStore>()((set, get) => ({
+  userPermissions: {},
 
-      updateUserPermissions: (userId: string, permissions: Partial<UserPermissions>) => {
-        set((state) => ({
-          userPermissions: {
-            ...state.userPermissions,
-            [userId]: {
-              ...state.userPermissions[userId],
-              userId,
-              brandAccess: permissions.brandAccess || state.userPermissions[userId]?.brandAccess || [],
-              marketplaceAccess: permissions.marketplaceAccess || state.userPermissions[userId]?.marketplaceAccess || [],
-              shippingAccess: permissions.shippingAccess || state.userPermissions[userId]?.shippingAccess || [],
-            },
-          },
-        }));
-      },
-
-      getUserPermissions: (userId: string) => {
-        const state = get();
-        return state.userPermissions[userId] || {
+  updateUserPermissions: (userId: string, permissions: Partial<UserPermissions>) => {
+    set((state) => ({
+      userPermissions: {
+        ...state.userPermissions,
+        [userId]: {
+          ...state.userPermissions[userId],
           userId,
-          brandAccess: [],
-          marketplaceAccess: [],
-          shippingAccess: [],
-        };
+          brandAccess: permissions.brandAccess || state.userPermissions[userId]?.brandAccess || [],
+          marketplaceAccess: permissions.marketplaceAccess || state.userPermissions[userId]?.marketplaceAccess || [],
+          shippingAccess: permissions.shippingAccess || state.userPermissions[userId]?.shippingAccess || [],
+        },
       },
+    }));
+  },
 
-      getPermissionCounts: (userId: string) => {
-        const permissions = get().getUserPermissions(userId);
-        return {
-          brands: {
-            granted: permissions.brandAccess.filter(p => p.isActive).length,
-            total: permissions.brandAccess.length,
-          },
-          marketplaces: {
-            granted: permissions.marketplaceAccess.filter(p => p.isActive).length,
-            total: permissions.marketplaceAccess.length,
-          },
-          shipping: {
-            granted: permissions.shippingAccess.filter(p => p.isActive).length,
-            total: permissions.shippingAccess.length,
-          },
-        };
-      },
+  getUserPermissions: (userId: string) => {
+    const state = get();
+    return state.userPermissions[userId] || {
+      userId,
+      brandAccess: [],
+      marketplaceAccess: [],
+      shippingAccess: [],
+    };
+  },
 
-      resetUserPermissions: (userId: string) => {
-        set((state) => {
-          const newState = { ...state.userPermissions };
-          delete newState[userId];
-          return { userPermissions: newState };
-        });
+  getPermissionCounts: (userId: string) => {
+    const permissions = get().getUserPermissions(userId);
+    return {
+      brands: {
+        granted: permissions.brandAccess.filter(p => p.isActive).length,
+        total: permissions.brandAccess.length,
       },
-    }),
-    {
-      name: 'permissions-storage',
-    }
-  )
-);
+      marketplaces: {
+        granted: permissions.marketplaceAccess.filter(p => p.isActive).length,
+        total: permissions.marketplaceAccess.length,
+      },
+      shipping: {
+        granted: permissions.shippingAccess.filter(p => p.isActive).length,
+        total: permissions.shippingAccess.length,
+      },
+    };
+  },
+
+  resetUserPermissions: (userId: string) => {
+    set((state) => {
+      const newState = { ...state.userPermissions };
+      delete newState[userId];
+      return { userPermissions: newState };
+    });
+  },
+}));

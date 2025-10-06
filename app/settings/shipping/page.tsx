@@ -28,6 +28,9 @@ import {
   Loader2,
   FileText
 } from 'lucide-react';
+import { Button } from '../../components/ui/button';
+import UnifiedAddNew from '../../components/UnifiedAddNew';
+import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
 
 interface ShippingCompanyFormData {
   name: string;
@@ -50,6 +53,9 @@ export default function ShippingPage() {
   const [uploadResult, setUploadResult] = useState<BulkUploadResponse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bulkCompanies, setBulkCompanies] = useState<CreateShippingCompanyRequest[]>([]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [companyToDelete, setCompanyToDelete] = useState<ShippingCompany | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Load shipping companies on component mount
   useEffect(() => {
@@ -107,18 +113,26 @@ export default function ShippingPage() {
     }
   };
 
-  const handleDeleteCompany = async (id: number) => {
-    if (!accessToken || !isAdmin()) return;
-    
-    if (!confirm('Are you sure you want to delete this shipping company?')) return;
+  const handleDeleteCompany = async () => {
+    if (!accessToken || !isAdmin() || !companyToDelete) return;
     
     try {
+      setIsDeleting(true);
       setError(null);
-      await ShippingService.deleteShippingCompany(id, accessToken);
+      await ShippingService.deleteShippingCompany(companyToDelete.id, accessToken);
       await loadShippingCompanies();
+      setShowDeleteModal(false);
+      setCompanyToDelete(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete shipping company');
+    } finally {
+      setIsDeleting(false);
     }
+  };
+
+  const openDeleteModal = (company: ShippingCompany) => {
+    setCompanyToDelete(company);
+    setShowDeleteModal(true);
   };
 
   const handleBulkUpload = async () => {
@@ -249,29 +263,12 @@ export default function ShippingPage() {
             </p>
           </div>
           {isAdminUser && (
-            <div className="flex gap-2">
-              <button
-                onClick={openBulkUploadModal}
-                className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded flex items-center gap-2"
-              >
-                <Upload size={16} />
-                File Upload
-              </button>
-              <button
-                onClick={() => setShowBulkAddModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded flex items-center gap-2"
-              >
-                <Plus size={16} />
-                Bulk Add
-              </button>
-              <button
-                onClick={openAddModal}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-2 rounded flex items-center gap-2"
-              >
-                <Plus size={16} />
-                Add Platform
-              </button>
-            </div>
+            <UnifiedAddNew
+              platformType="shipping"
+              onAddShipping={openAddModal}
+              onBulkAddShipping={() => setShowBulkAddModal(true)}
+              onImportShipping={openBulkUploadModal}
+            />
           )}
         </div>
 
@@ -336,7 +333,7 @@ export default function ShippingPage() {
                         <Edit size={16} className="text-gray-500" />
                       </button>
                       <button
-                        onClick={() => handleDeleteCompany(company.id)}
+                        onClick={() => openDeleteModal(company)}
                         className="p-1 hover:bg-red-100 rounded"
                         title="Delete"
                       >
@@ -638,6 +635,26 @@ export default function ShippingPage() {
             </div>
           </div>
         )}
+
+        {/* Delete Shipping Company Modal */}
+        <DeleteConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={() => {
+            setShowDeleteModal(false);
+            setCompanyToDelete(null);
+          }}
+          onConfirm={handleDeleteCompany}
+          title="Delete Shipping Company"
+          itemName={companyToDelete?.name || ''}
+          itemType="Shipping Company"
+          confirmationText={companyToDelete?.name || ''}
+          isDeleting={isDeleting}
+          warningMessage="This will permanently delete the shipping company and all associated data."
+          additionalInfo={companyToDelete ? [
+            { label: 'Description', value: companyToDelete.description },
+            { label: 'ID', value: companyToDelete.id.toString() }
+          ] : []}
+        />
       </div>
     </SettingsLayout>
   );

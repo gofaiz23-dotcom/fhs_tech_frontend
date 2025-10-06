@@ -5,6 +5,9 @@ import SettingsLayout from "../_components/SettingsLayout";
 import { Package, Plus, Edit, Trash2, Loader2, AlertCircle, RefreshCw, Upload, FileText, Download, Info, Search } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { BrandsService, BrandsUtils, type Brand } from '../../lib/brands/api';
+import { Button } from '../../components/ui/button';
+import UnifiedAddNew from '../../components/UnifiedAddNew';
+import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
 
 export default function BrandsPage() {
   const { state: authState, isAdmin } = useAuth();
@@ -275,39 +278,23 @@ export default function BrandsPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <button
+            <Button
               onClick={loadBrands}
               disabled={isLoading}
-              className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+              variant="outline"
+              size="sm"
               title="Refresh brands"
             >
               <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
               Refresh
-            </button>
+            </Button>
             {isAdmin() && (
-              <>
-                <button 
-                  onClick={() => setShowCreateModal(true)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-2 rounded flex items-center gap-2"
-                >
-                  <Plus size={16} />
-                  Add Brand
-                </button>
-                <button 
-                  onClick={() => setShowBulkModal(true)}
-                  className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded flex items-center gap-2"
-                >
-                  <Plus size={16} />
-                  Bulk Add
-                </button>
-                <button 
-                  onClick={() => setShowUploadModal(true)}
-                  className="bg-purple-600 hover:bg-purple-700 text-white text-sm px-4 py-2 rounded flex items-center gap-2"
-                >
-                  <Upload size={16} />
-                  Import File
-                </button>
-              </>
+              <UnifiedAddNew
+                platformType="brands"
+                onAddBrand={() => setShowCreateModal(true)}
+                onBulkAddBrand={() => setShowBulkModal(true)}
+                onImportBrand={() => setShowUploadModal(true)}
+              />
             )}
           </div>
         </div>
@@ -507,31 +494,24 @@ export default function BrandsPage() {
         )}
 
         {/* Delete Brand Modal */}
-        {showDeleteModal && selectedBrand && (
-          <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Brand</h3>
-              <p className="text-gray-600 mb-6">
-                Are you sure you want to delete "{selectedBrand.name}"? This action cannot be undone.
-              </p>
-              <div className="flex gap-2 justify-end">
-                <button
-                  onClick={() => {setShowDeleteModal(false); setSelectedBrand(null);}}
-                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteBrand}
-                  disabled={isSubmitting}
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Deleting...' : 'Delete Brand'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <DeleteConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={() => {
+            setShowDeleteModal(false);
+            setSelectedBrand(null);
+          }}
+          onConfirm={handleDeleteBrand}
+          title="Delete Brand"
+          itemName={selectedBrand?.name || ''}
+          itemType="Brand"
+          confirmationText={selectedBrand?.name || ''}
+          isDeleting={isSubmitting}
+          warningMessage="This will permanently delete the brand and all associated data."
+          additionalInfo={selectedBrand ? [
+            { label: 'Description', value: selectedBrand.description },
+            { label: 'ID', value: selectedBrand.id.toString() }
+          ] : []}
+        />
 
         {/* Bulk Create Modal */}
         {showBulkModal && (

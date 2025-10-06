@@ -1,24 +1,18 @@
 "use client";
 import React from "react";
+import { useWarehousesStore, Warehouse } from '../../lib/stores/warehousesStore';
 
-export type Warehouse = {
-  id: string;
-  name: string;
-  address: string;
-  inventorySource: string;
-};
-
-type WarehouseContextValue = {
+interface WarehouseContextType {
   warehouses: Warehouse[];
   loading: boolean;
   error: string | null;
+  refresh: () => Promise<void>;
   addWarehouse: (data: Omit<Warehouse, "id">) => Promise<void>;
   updateWarehouse: (id: string, data: Omit<Warehouse, "id">) => Promise<void>;
   deleteWarehouse: (id: string) => Promise<void>;
-  refresh: () => Promise<void>;
-};
+}
 
-const WarehouseContext = React.createContext<WarehouseContextValue | undefined>(undefined);
+const WarehouseContext = React.createContext<WarehouseContextType | null>(null);
 
 export function useWarehouses() {
   const ctx = React.useContext(WarehouseContext);
@@ -27,29 +21,16 @@ export function useWarehouses() {
 }
 
 export function WarehouseProvider({ children }: { children: React.ReactNode }) {
-  const [warehouses, setWarehouses] = React.useState<Warehouse[]>([]);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-
-  const loadFromStorage = () => {
-    const data = JSON.parse(localStorage.getItem("fhs_warehouses") || "[]");
-    setWarehouses(data);
-  };
-
-  React.useEffect(() => {
-    loadFromStorage();
-  }, []);
-
-  const persist = (next: Warehouse[]) => {
-    localStorage.setItem("fhs_warehouses", JSON.stringify(next));
-    setWarehouses(next);
-  };
-
-  // API INTEGRATION NOTES:
-  // Replace the localStorage implementations below with real API calls.
-  // 1) Add your base URL and auth headers.
-  // 2) Swap out the local updates with fetch/axios calls.
-  // 3) On success, update state with the server response.
+  const { 
+    warehouses, 
+    loading, 
+    error, 
+    addWarehouse: addWarehouseToStore, 
+    removeWarehouse, 
+    updateWarehouse: updateWarehouseInStore, 
+    setLoading, 
+    setError 
+  } = useWarehousesStore();
 
   const refresh = async () => {
     setLoading(true);
@@ -59,7 +40,7 @@ export function WarehouseProvider({ children }: { children: React.ReactNode }) {
       // const res = await fetch(`/api/warehouses`);
       // const data = await res.json();
       // setWarehouses(data);
-      loadFromStorage();
+      // No need to load from storage - Zustand handles state
     } catch (e: any) {
       setError(e?.message || "Failed to load warehouses");
     } finally {
@@ -71,12 +52,11 @@ export function WarehouseProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const newItem: Warehouse = { id: crypto.randomUUID(), ...data };
       // API: POST /warehouses with body `data`
       // const res = await fetch(`/api/warehouses`, { method: 'POST', body: JSON.stringify(data) })
       // const created = await res.json();
-      // persist([...warehouses, created])
-      persist([...warehouses, newItem]);
+      // addWarehouseToStore(created)
+      addWarehouseToStore(data);
     } catch (e: any) {
       setError(e?.message || "Failed to add warehouse");
     } finally {
@@ -88,11 +68,11 @@ export function WarehouseProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      // API: PUT /warehouses/:id
+      // API: PUT /warehouses/:id with body `data`
       // const res = await fetch(`/api/warehouses/${id}`, { method: 'PUT', body: JSON.stringify(data) })
       // const updated = await res.json();
-      const next = warehouses.map((w) => (w.id === id ? { ...w, ...data } : w));
-      persist(next);
+      // updateWarehouseInStore(id, updated)
+      updateWarehouseInStore(id, data);
     } catch (e: any) {
       setError(e?.message || "Failed to update warehouse");
     } finally {
@@ -106,8 +86,8 @@ export function WarehouseProvider({ children }: { children: React.ReactNode }) {
     try {
       // API: DELETE /warehouses/:id
       // await fetch(`/api/warehouses/${id}`, { method: 'DELETE' })
-      const next = warehouses.filter((w) => w.id !== id);
-      persist(next);
+      // removeWarehouse(id)
+      removeWarehouse(id);
     } catch (e: any) {
       setError(e?.message || "Failed to delete warehouse");
     } finally {
@@ -115,17 +95,19 @@ export function WarehouseProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const value: WarehouseContextValue = {
+  const value: WarehouseContextType = {
     warehouses,
     loading,
     error,
+    refresh,
     addWarehouse,
     updateWarehouse,
     deleteWarehouse,
-    refresh,
   };
 
-  return <WarehouseContext.Provider value={value}>{children}</WarehouseContext.Provider>;
+  return (
+    <WarehouseContext.Provider value={value}>
+      {children}
+    </WarehouseContext.Provider>
+  );
 }
-
-

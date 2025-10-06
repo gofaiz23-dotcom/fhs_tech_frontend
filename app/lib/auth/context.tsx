@@ -11,7 +11,9 @@
 import React, { createContext, useContext, useEffect, ReactNode } from 'react';
 import { User, UserProfile } from './types';
 import { AuthService, ensureValidToken } from './api';
+import { HttpClient } from './httpClient';
 import { useAuthStore } from '../stores/authStore';
+import { activityLogger } from '../activity-logger';
 
 // No reducer needed - using Zustand store directly
 
@@ -22,6 +24,9 @@ interface AuthContextType {
   logout: () => Promise<void>;
   register: (username: string, email: string, password: string, role: 'ADMIN' | 'USER') => Promise<void>;
   refreshAuth: () => Promise<void>;
+  restoreSession: () => Promise<void>;
+  testSessionRestoration: () => Promise<void>;
+  testCookieConfiguration: () => Promise<void>;
   
   // Utilities
   isAdmin: () => boolean;
@@ -60,8 +65,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /**
    * Initialize authentication on app start
    * 
-   * Checks for stored tokens and validates them with the server.
-   * Automatically loads user profile if valid token exists.
+   * Always attempts to restore session using refresh token cookie.
+   * This handles page refresh scenarios where in-memory state is lost.
    */
   useEffect(() => {
     async function initializeAuth() {
@@ -72,111 +77,83 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isLoading 
         });
 
-        // If no stored token, just set loading to false (don't logout)
-        if (!accessToken) {
-          console.log('❌ Auth: No access token, setting loading to false');
-          setLoading(false);
-          return;
-        }
-
         setLoading(true);
 
-        // Check if we have a valid stored token
-        const token = await ensureValidToken(accessToken);
-        console.log('🔑 Auth: Token validation result:', { hasToken: !!token });
-        
-        if (!token) {
-          // Token is invalid, but don't immediately logout - try to get profile first
-          console.log('⚠️ Auth: Token validation failed, trying to get profile with current token');
+        // Try to restore session using stored access token or refresh token
+        if (accessToken) {
+          console.log('🔄 Auth: Found stored access token, validating...');
+          
           try {
-            const profileResponse = await AuthService.getProfile(accessToken);
-            console.log('✅ Auth: Profile fetched with current token');
-            updateAuthState({
-              user: profileResponse.user,
-              accessToken: accessToken,
-            });
-            return;
-          } catch (profileError) {
-            console.log('❌ Auth: Profile fetch failed, logging out');
-            logoutStore();
-            return;
+            // Validate stored token and refresh if needed
+            const validToken = await ensureValidToken(accessToken);
+            
+            if (validToken) {
+              // Update token if it was refreshed
+              if (validToken !== accessToken) {
+                console.log('✅ Auth: Token was refreshed, updating store');
+                setAccessToken(validToken);
+              }
+
+              // Get user profile with the valid token
+              console.log('👤 Auth: Fetching user profile...');
+              const profileResponse = await AuthService.getProfile(validToken);
+              console.log('✅ Auth: Profile fetched successfully');
+              
+              updateAuthState({
+                user: profileResponse.user,
+                accessToken: validToken,
+              });
+              console.log('✅ Auth: Session restored successfully with stored token');
+              return;
+            } else {
+              console.log('⚠️ Auth: Stored token is invalid, trying refresh token...');
+            }
+          } catch (error) {
+            console.log('⚠️ Auth: Stored token validation failed, trying refresh token...');
           }
         }
 
-        // Get user profile with the valid token
-        console.log('👤 Auth: Fetching user profile...');
-        const profileResponse = await AuthService.getProfile(token);
-        console.log('✅ Auth: Profile fetched successfully');
-        
-        updateAuthState({
-          user: profileResponse.user,
-          accessToken: token,
-        });
-        console.log('✅ Auth: State updated');
+        // No stored token or stored token is invalid - user needs to login
+        console.log('⚠️ Auth: No valid access token found, user needs to login');
+        setLoading(false);
+        return;
       } catch (error) {
         console.error('❌ Auth: Failed to initialize:', error);
-        // Only logout if we had a token but it failed
-        if (accessToken) {
-          console.log('❌ Auth: Had token but failed, logging out');
-          logoutStore();
-        } else {
-          console.log('❌ Auth: No token and failed, just setting loading false');
-          setLoading(false);
-        }
+        console.log('❌ Auth: Setting loading to false');
+        setLoading(false);
       }
     }
 
-    // Initialize auth when component mounts or when auth state changes
+    // Initialize auth when component mounts
     if (isLoading) {
       console.log('🚀 Auth: Initializing...');
       initializeAuth();
     }
-  }, [isLoading, accessToken, setLoading, logoutStore, updateAuthState]);
+  }, [isLoading, setLoading, updateAuthState]);
 
   // Fallback timeout to prevent infinite loading
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (isLoading) {
-        console.warn('⚠️ Auth initialization timeout - forcing logout');
-        logoutStore();
+        console.warn('⚠️ Auth initialization timeout - setting loading to false');
+        setLoading(false);
       }
     }, 10000); // 10 second timeout
 
     return () => clearTimeout(timeout);
-  }, [isLoading, logoutStore]);
+  }, [isLoading, setLoading]);
 
-  // Automatic token refresh every 10 minutes (before 15-minute expiration)
+  // Automatic token refresh disabled for now - using localStorage persistence instead
+  // Token will be validated on each API call and user can login again if token expires
   useEffect(() => {
-    let refreshInterval: NodeJS.Timeout | null = null;
-
+    console.log('🔄 Auth: Automatic token refresh is disabled - using localStorage persistence');
+    
+    // Just log the current state for debugging
     if (isAuthenticated && accessToken) {
-      refreshInterval = setInterval(async () => {
-        try {
-          console.log('🔄 Auto-refreshing token...');
-          const refreshResponse = await AuthService.refreshToken();
-          
-          // Update the token in the store
-          updateAuthState({
-            user: user!,
-            accessToken: refreshResponse.accessToken,
-          });
-          console.log('✅ Token refreshed successfully');
-        } catch (error) {
-          console.error('❌ Auto token refresh failed:', error);
-          // Don't immediately logout on refresh failure - let the user continue working
-          // The token will be validated on the next API call
-          console.log('⚠️ Token refresh failed, but keeping user logged in');
-        }
-      }, 10 * 60 * 1000); // 10 minutes in milliseconds (before 15-minute expiration)
+      console.log('✅ Auth: User is authenticated with persisted token');
+      // Don't try to get token expiration since that might cause errors
     }
-
-    // Cleanup interval on unmount or when authentication state changes
-    return () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-      }
-    };
-  }, [isAuthenticated, accessToken, user, updateAuthState, logoutStore]);
+  }, [isAuthenticated, accessToken]);
 
 
   /**
@@ -190,16 +167,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       clearError();
 
-      // Perform login
+      // Perform login and get access token
       const loginResponse = await AuthService.login({ email, password });
+      console.log('✅ Login: Received access token');
       
-      // Get detailed user profile
+      // Get detailed user profile using the access token
       const profileResponse = await AuthService.getProfile(loginResponse.accessToken);
+      console.log('🔍 Login: Profile response:', profileResponse);
+      console.log('🔍 Login: User from response:', profileResponse.user);
+      console.log('🔍 Login: User role:', profileResponse.user?.role);
 
       updateAuthState({
         user: profileResponse.user,
         accessToken: loginResponse.accessToken,
       });
+
+      // Log the login activity
+      if (profileResponse.user) {
+        activityLogger.logUserLogin(
+          profileResponse.user.email,
+          profileResponse.user.username
+        );
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
       setError(errorMessage);
@@ -214,11 +203,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    */
   const logout = async (): Promise<void> => {
     try {
+      // Logout with access token
       if (accessToken) {
         await AuthService.logout(accessToken);
+        console.log('✅ Logout: Server tokens invalidated');
       }
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('❌ Logout error:', error);
       // Continue with logout even if server call fails
     } finally {
       logoutStore();
@@ -248,6 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       clearError();
 
+      // Registration with admin token if available
       await AuthService.register(
         { username, email, password, role },
         accessToken || undefined
@@ -269,22 +261,143 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    */
   const refreshAuth = async (): Promise<void> => {
     try {
-      const token = await ensureValidToken(accessToken);
-      
-      if (!token) {
+      if (!accessToken) {
+        console.log('❌ Auth: No access token available, logging out');
         logoutStore();
         return;
       }
 
-      const profileResponse = await AuthService.getProfile(token);
+      // Validate and refresh token if needed
+      const validToken = await ensureValidToken(accessToken);
+      
+      if (!validToken) {
+        console.log('❌ Auth: Token validation failed, logging out');
+        logoutStore();
+        return;
+      }
+
+      // Update token if it was refreshed
+      if (validToken !== accessToken) {
+        setAccessToken(validToken);
+      }
+
+      // Get fresh user profile
+      const profileResponse = await AuthService.getProfile(validToken);
       
       updateAuthState({
         user: profileResponse.user,
-        accessToken: token,
+        accessToken: validToken,
       });
+      
+      console.log('✅ Auth: Authentication refreshed successfully');
     } catch (error) {
       console.error('Failed to refresh auth:', error);
       logoutStore();
+      throw error;
+    }
+  };
+
+  /**
+   * Test session restoration
+   * 
+   * Useful for debugging session restoration issues
+   */
+  const testSessionRestoration = async (): Promise<void> => {
+    console.log('🧪 Auth: Testing session restoration...');
+    console.log('🧪 Auth: Current auth state:', {
+      hasUser: !!user,
+      hasToken: !!accessToken,
+      isAuthenticated,
+      isLoading
+    });
+    
+    try {
+      // Try refresh token first
+      console.log('🧪 Auth: Testing refresh token...');
+      const refreshResponse = await AuthService.refreshToken();
+      console.log('✅ Auth: Refresh token test successful');
+      
+      // Get profile
+      const profileResponse = await AuthService.getProfile(refreshResponse.accessToken);
+      console.log('✅ Auth: Profile test successful');
+      
+      updateAuthState({
+        user: profileResponse.user,
+        accessToken: refreshResponse.accessToken,
+      });
+      
+      console.log('✅ Auth: Session restoration test completed successfully');
+    } catch (error) {
+      console.error('❌ Auth: Session restoration test failed:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Test cookie configuration and CORS setup
+   */
+  const testCookieConfiguration = async (): Promise<void> => {
+    console.log('🧪 Testing cookie configuration...');
+    try {
+      const result = await HttpClient.testCookieConfiguration();
+      console.log('🍪 Cookie Test Results:', result);
+      
+      if (!result.cookiesAvailable) {
+        console.warn('⚠️ No cookies available - this might be why refresh token is not working');
+      }
+      
+      if (result.corsTest.error) {
+        console.error('❌ CORS Test Failed:', result.corsTest.error);
+        console.log('💡 This suggests a CORS configuration issue on the backend');
+        console.log('💡 Backend needs to allow credentials from your frontend domain');
+      }
+    } catch (error) {
+      console.error('❌ Cookie configuration test failed:', error);
+    }
+  };
+
+  /**
+   * Restore session from stored token
+   * 
+   * Useful for manually restoring session after page refresh or network issues
+   */
+  const restoreSession = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      console.log('🔄 Auth: Manually restoring session...');
+      
+      if (!accessToken) {
+        console.log('❌ Auth: No access token available, cannot restore session');
+        logoutStore();
+        return;
+      }
+
+      // Validate and refresh token if needed
+      const validToken = await ensureValidToken(accessToken);
+      
+      if (!validToken) {
+        console.log('❌ Auth: Token validation failed, cannot restore session');
+        logoutStore();
+        return;
+      }
+
+      // Update token if it was refreshed
+      if (validToken !== accessToken) {
+        setAccessToken(validToken);
+      }
+
+      // Get fresh user profile
+      const profileResponse = await AuthService.getProfile(validToken);
+      
+      updateAuthState({
+        user: profileResponse.user,
+        accessToken: validToken,
+      });
+      
+      console.log('✅ Auth: Session restored manually with valid token');
+    } catch (error) {
+      console.error('❌ Auth: Failed to restore session:', error);
+      setLoading(false);
       throw error;
     }
   };
@@ -323,6 +436,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout,
     register,
     refreshAuth,
+    restoreSession,
+    testSessionRestoration,
+    testCookieConfiguration,
     isAdmin,
     hasPermission,
   };

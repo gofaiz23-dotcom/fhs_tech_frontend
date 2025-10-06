@@ -30,6 +30,8 @@ const ADMIN_ENDPOINTS = {
   UPDATE_EMAIL: (id: number) => `${API_BASE_URL}/admin/users/${id}/email`,
   UPDATE_PASSWORD: (id: number) => `${API_BASE_URL}/admin/users/${id}/password`,
   UPDATE_ROLE: (id: number) => `${API_BASE_URL}/admin/users/${id}/role`,
+  UPDATE_USERNAME: (id: number) => `${API_BASE_URL}/admin/users/${id}/username`,
+  DELETE_USER: (id: number) => `${API_BASE_URL}/admin/users/${id}/delete`,
   // Toggle access endpoints
   TOGGLE_BRAND_ACCESS: (userId: number, brandId: number) => `${API_BASE_URL}/users/${userId}/brands/${brandId}/toggle`,
   TOGGLE_MARKETPLACE_ACCESS: (userId: number, marketplaceId: number) => `${API_BASE_URL}/users/${userId}/marketplaces/${marketplaceId}/toggle`,
@@ -174,8 +176,20 @@ export class AdminService {
    * @param accessToken - Admin access token
    * @returns Promise<UsersWithHistoryResponse> - Users with login history
    */
-  static async getUsersWithHistory(accessToken: string): Promise<UsersWithHistoryResponse> {
-    return adminApiRequest<UsersWithHistoryResponse>(ADMIN_ENDPOINTS.USERS_HISTORY, {
+  static async getUsersWithHistory(accessToken: string, monthsBack: number = 6): Promise<UsersWithHistoryResponse> {
+    // Calculate date range for the specified number of months back
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - monthsBack);
+    
+    const params = new URLSearchParams({
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+    });
+    
+    const url = `${ADMIN_ENDPOINTS.USERS_HISTORY}?${params.toString()}`;
+    
+    return adminApiRequest<UsersWithHistoryResponse>(url, {
       method: 'GET',
     }, accessToken);
   }
@@ -265,6 +279,89 @@ export class AdminService {
       method: 'PUT',
       body: JSON.stringify(requestData),
     }, accessToken);
+  }
+
+  /**
+   * Update user username
+   * 
+   * @param userId - User ID to update
+   * @param username - New username
+   * @param accessToken - Admin access token
+   * @returns Promise<UpdateUserResponse> - Update result
+   */
+  static async updateUsername(userId: number, username: string, accessToken: string): Promise<UpdateUserResponse> {
+    try {
+      console.log('🔍 API: Updating username for user', userId, 'to', username);
+      console.log('🔍 API: Endpoint:', ADMIN_ENDPOINTS.UPDATE_USERNAME(userId));
+      console.log('🔍 API: Request body:', JSON.stringify({ username }));
+      console.log('🔍 API: Access token (first 20 chars):', accessToken.substring(0, 20) + '...');
+      
+      // Test if endpoint is reachable first
+      console.log('🔍 API: Testing endpoint reachability...');
+      try {
+        const testResponse = await fetch(ADMIN_ENDPOINTS.UPDATE_USERNAME(userId), {
+          method: 'OPTIONS', // Use OPTIONS to test connectivity without side effects
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          }
+        });
+        console.log('🔍 API: Test response status:', testResponse.status);
+        console.log('🔍 API: Test response headers:', Object.fromEntries(testResponse.headers.entries()));
+      } catch (testError) {
+        console.log('🔍 API: Test request failed:', testError);
+      }
+      
+      const result = await adminApiRequest<UpdateUserResponse>(ADMIN_ENDPOINTS.UPDATE_USERNAME(userId), {
+        method: 'PUT',
+        body: JSON.stringify({ username }),
+      }, accessToken);
+      
+      console.log('✅ API: Username update successful:', result);
+      return result;
+    } catch (error: any) {
+      console.error('❌ API: Username update failed:', error);
+      console.error('❌ API: Error type:', typeof error);
+      console.error('❌ API: Error constructor:', error.constructor.name);
+      console.error('❌ API: Error keys:', Object.keys(error));
+      console.error('❌ API: Full error object:', JSON.stringify(error, null, 2));
+      console.error('❌ API: Error details:', {
+        message: error.message,
+        statusCode: error.statusCode,
+        code: error.code,
+        status: error.status,
+        response: error.response
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Delete user
+   * 
+   * @param userId - User ID to delete
+   * @param accessToken - Admin access token
+   * @returns Promise<{ success: boolean; message: string }> - Delete result
+   */
+  static async deleteUser(userId: number, accessToken: string): Promise<{ success: boolean; message: string }> {
+    try {
+      console.log('🔍 API: Deleting user', userId);
+      console.log('🔍 API: Endpoint:', ADMIN_ENDPOINTS.DELETE_USER(userId));
+      
+      const result = await adminApiRequest<{ success: boolean; message: string }>(ADMIN_ENDPOINTS.DELETE_USER(userId), {
+        method: 'DELETE',
+      }, accessToken);
+      
+      console.log('✅ API: User deletion successful:', result);
+      return result;
+    } catch (error: any) {
+      console.error('❌ API: User deletion failed:', error);
+      console.error('❌ API: Error details:', {
+        message: error.message,
+        statusCode: error.statusCode,
+        code: error.code
+      });
+      throw error;
+    }
   }
 
   /**

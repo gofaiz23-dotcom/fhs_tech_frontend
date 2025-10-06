@@ -2,6 +2,7 @@
 import SettingsLayout from "../_components/SettingsLayout";
 import { useRouter } from "next/navigation";
 import React from "react";
+import { useUsersStore } from "../../lib/stores/usersStore";
 
 type AccountFormState = {
   firstName: string;
@@ -14,6 +15,7 @@ type AccountFormState = {
 
 export default function AccountInfoPage() {
   const router = useRouter();
+  const { addUser } = useUsersStore();
   const [form, setForm] = React.useState<AccountFormState>({
     firstName: "",
     lastName: "",
@@ -29,16 +31,14 @@ export default function AccountInfoPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const existing = JSON.parse(localStorage.getItem("fhs_users") || "[]");
-    const user = {
-      id: Date.now(),
+    const userData = {
       firstName: form.firstName,
       lastName: form.lastName,
       email: form.email,
       telephone: form.telephone,
       companyName: form.companyName,
     };
-    localStorage.setItem("fhs_users", JSON.stringify([user, ...existing]));
+    addUser(userData);
     setForm({ firstName: "", lastName: "", email: "", telephone: "", companyName: "", password: "" });
     router.push("/settings/users");
   };

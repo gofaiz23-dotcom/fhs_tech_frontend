@@ -81,7 +81,7 @@ export default function SideNavigation({ isOpen, onClose }: SideNavigationProps)
       )}
 
       {/* Side Navigation */}
-      <div className={`fixed top-0 right-0 h-full w-80 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${
+      <div className={`fixed top-0 right-0 h-full w-80 bg-white shadow-soft-lg z-50 transform transition-transform duration-300 ease-in-out ${
         isOpen ? 'translate-x-0' : 'translate-x-full'
       }`}>
         <div className="flex flex-col h-full">
@@ -111,13 +111,13 @@ export default function SideNavigation({ isOpen, onClose }: SideNavigationProps)
                     key={link.href}
                     href={link.href}
                     onClick={onClose}
-                    className={`flex items-center p-3 rounded-lg transition-colors group ${
+                    className={`flex items-center p-4 rounded-xl transition-all duration-200 group ${
                       active 
-                        ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' 
-                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                        ? 'bg-primary-50 text-primary-700 border border-primary-200 shadow-soft' 
+                        : 'text-secondary-700 hover:bg-secondary-50 hover:text-secondary-900 hover:shadow-soft'
                     }`}
                   >
-                    <Icon size={20} className={`mr-3 ${active ? 'text-indigo-500' : 'text-gray-400 group-hover:text-gray-500'}`} />
+                    <Icon size={20} className={`mr-3 ${active ? 'text-primary-500' : 'text-secondary-400 group-hover:text-secondary-500'}`} />
                     <div className="flex-1">
                       <div className="font-medium">{link.label}</div>
                       <div className="text-xs text-gray-500">{link.description}</div>

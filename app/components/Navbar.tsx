@@ -8,6 +8,7 @@ import React from "react";
 import { useAuth } from "../lib/auth";
 import CollapsibleSidebar from "./CollapsibleSidebar";
 import { useSidebar } from "./SidebarContext";
+import { ThemeToggle } from "./ui/theme-toggle";
 
 export default function Navbar() {
   const { state, logout } = useAuth();
@@ -34,18 +35,19 @@ export default function Navbar() {
         left: sidebarCollapsed ? '64px' : '256px',
         width: `calc(100% - ${sidebarCollapsed ? '64px' : '256px'})`
       }}>
-        <div className="bg-white border-b border-gray-200 shadow-sm">
-          <div className="flex items-center justify-end px-6 py-4">
+        <div className="bg-white border-b border-secondary-200 shadow-soft dark:bg-gray-900 dark:border-gray-700">
+          <div className="flex items-center justify-end px-6 py-4 gap-3">
+            <ThemeToggle />
             {state.isAuthenticated && state.user ? (
               <button
                 onClick={handleLogout}
-                className="bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+                className="btn-warning text-sm flex items-center gap-2"
               >
                 Sign out
                 <LogOut size={16} />
               </button>
             ) : (
-              <Link href="/login" className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors text-sm font-medium text-white">
+              <Link href="/login" className="btn-primary text-sm">
                 Sign In
               </Link>
             )}
