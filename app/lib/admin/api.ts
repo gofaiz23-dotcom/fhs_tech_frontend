@@ -19,6 +19,7 @@ import {
   AdminApiErrorResponse,
 } from './types';
 import { AuthService, ensureValidToken } from '../auth/api';
+import { HttpClient } from '../auth/httpClient';
 
 // Base API configuration
 const API_BASE_URL = 'https://fhs-tech-backend.onrender.com/api';
@@ -76,70 +77,17 @@ async function adminApiRequest<T>(url: string, options: RequestInit = {}, access
       throw new AdminApiError('Token expired and refresh failed', 401, 'TOKEN_EXPIRED');
     }
 
-    const response = await fetch(url, {
+    // Convert full URL to endpoint path for HttpClient
+    const endpoint = url.replace(API_BASE_URL, '');
+    
+    // Use HttpClient with authenticated request (handles token refresh automatically)
+    return await HttpClient.authenticatedRequest(endpoint, {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
         'Authorization': `Bearer ${validToken}`,
         ...options.headers,
       },
-      credentials: 'include',
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      const error = data as AdminApiErrorResponse;
-      
-      // Handle token expiration specifically
-      if (response.status === 401 && (error.error?.includes('expired') || error.error?.includes('invalid'))) {
-        console.log('🔄 Token expired, attempting refresh...');
-        
-        try {
-          // Try to refresh the token
-          const refreshResponse = await AuthService.refreshToken();
-          console.log('✅ Token refreshed successfully, retrying request...');
-          
-          // Retry the request with the new token
-          const retryResponse = await fetch(url, {
-            ...options,
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${refreshResponse.accessToken}`,
-              ...options.headers,
-            },
-            credentials: 'include',
-          });
-
-          const retryData = await retryResponse.json();
-          
-          if (!retryResponse.ok) {
-            throw new AdminApiError(
-              retryData.error || 'Request failed after token refresh',
-              retryResponse.status,
-              retryData.code?.toString()
-            );
-          }
-          
-          return retryData as T;
-        } catch (refreshError) {
-          console.error('❌ Token refresh failed:', refreshError);
-          throw new AdminApiError(
-            'Session expired. Please log in again.',
-            401,
-            'TOKEN_REFRESH_FAILED'
-          );
-        }
-      }
-      
-      throw new AdminApiError(
-        error.error || 'An admin API error occurred',
-        response.status,
-        error.code?.toString()
-      );
-    }
-
-    return data as T;
   } catch (error) {
     if (error instanceof AdminApiError) {
       throw error;
@@ -299,7 +247,7 @@ export class AdminService {
       // Test if endpoint is reachable first
       console.log('🔍 API: Testing endpoint reachability...');
       try {
-        const testResponse = await fetch(ADMIN_ENDPOINTS.UPDATE_USERNAME(userId), {
+        const testResponse = await HttpClient.request(ADMIN_ENDPOINTS.UPDATE_USERNAME(userId).replace(API_BASE_URL, ''), {
           method: 'OPTIONS', // Use OPTIONS to test connectivity without side effects
           headers: {
             'Authorization': `Bearer ${accessToken}`,

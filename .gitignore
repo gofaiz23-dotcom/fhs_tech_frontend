@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.history/app/components/Navbar_20250930181346.tsx
+/.history
+/.history/app/components
+/.history/app

@@ -7,7 +7,6 @@
  */
 
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import type { User } from '../auth/types';
 
 interface AuthState {
@@ -46,14 +45,12 @@ const initialState: AuthState = {
 };
 
 /**
- * Authentication store with persistence
+ * Authentication store with memory-only storage
  * 
- * Uses localStorage to persist authentication state across page refreshes.
- * Access tokens are stored securely and restored on app initialization.
+ * Uses in-memory storage only for security. Authentication state is restored
+ * on app initialization using HttpOnly cookies via the refresh token API.
  */
-export const useAuthStore = create<AuthStore>()(
-  persist(
-    (set, get) => ({
+export const useAuthStore = create<AuthStore>()((set, get) => ({
   ...initialState,
 
   // Set authenticated user
@@ -117,19 +114,21 @@ export const useAuthStore = create<AuthStore>()(
   clearAuthState: () => {
     set(initialState);
   },
-    }),
-    {
-      name: 'auth-storage', // localStorage key
-      storage: createJSONStorage(() => localStorage),
-      // Only persist essential auth data
-      partialize: (state) => ({
-        user: state.user,
-        accessToken: state.accessToken,
-        isAuthenticated: state.isAuthenticated,
-      }),
+
+  // Clear any existing localStorage data (one-time cleanup)
+  clearLegacyStorage: () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('auth-storage');
+      // Clear any other auth-related localStorage items
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('auth') || key.includes('token')) {
+          localStorage.removeItem(key);
+        }
+      });
+      console.log('✅ Cleared all legacy auth localStorage data');
     }
-  )
-);
+  },
+}));
 
 /**
  * Selectors for commonly used state combinations
