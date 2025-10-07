@@ -1,7 +1,7 @@
 "use client";
 import SettingsLayout from "../_components/SettingsLayout";
 import React from "react";
-import { Pencil, Trash2, Eye, EyeOff, AlertCircle, Loader2, RefreshCw, Search, CheckCircle } from "lucide-react";
+import { Pencil, Trash2, Eye, EyeOff, AlertCircle, RefreshCw, Search, CheckCircle } from "lucide-react";
 import { AdminService, AdminUtils } from "../../lib/admin";
 import { useAuth, AuthService } from "../../lib/auth";
 import type { DetailedUser } from "../../lib/admin/types";
@@ -49,7 +49,20 @@ export default function ManageUsersPage() {
   const [users, setUsers] = React.useState<DetailedUser[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = React.useState('');
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
+
+  // Filter users based on search term
+  const filteredUsers = React.useMemo(() => {
+    if (!searchTerm.trim()) return users;
+    
+    const term = searchTerm.toLowerCase();
+    return users.filter(user => 
+      user.username?.toLowerCase().includes(term) ||
+      user.email?.toLowerCase().includes(term) ||
+      user.role?.toLowerCase().includes(term)
+    );
+  }, [users, searchTerm]);
 
   // UI state
   const [open, setOpen] = React.useState(false);
@@ -82,8 +95,6 @@ export default function ManageUsersPage() {
   const [availableShipping, setAvailableShipping] = React.useState<ShippingPlatform[]>([]);
   const [isLoadingAvailableItems, setIsLoadingAvailableItems] = React.useState(false);
 
-  // Search state
-  const [searchTerm, setSearchTerm] = React.useState('');
 
   // Delete user state
   const [showDeleteModal, setShowDeleteModal] = React.useState(false);
@@ -608,12 +619,6 @@ export default function ManageUsersPage() {
     );
   };
 
-  // Filter users based on search term
-  const filteredUsers = users.filter(user =>
-    getDisplayUsername(user).toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.role.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
     <SettingsLayout>
@@ -623,11 +628,22 @@ export default function ManageUsersPage() {
             <h2 className="text-xl font-semibold text-gray-800">Manage Users</h2>
             {!isLoading && (
               <p className="text-sm text-gray-600 mt-1">
-                {users.length} user{users.length !== 1 ? 's' : ''} total
+                {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} total
+                {searchTerm && ` (filtered from ${users.length})`}
               </p>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="input-soft pl-10 pr-4 py-2 w-64"
+              />
+            </div>
             <button
               onClick={loadUsers}
               disabled={isLoading}
@@ -635,7 +651,7 @@ export default function ManageUsersPage() {
               title="Refresh users"
             >
               <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-              Refresh
+              <span className="hidden sm:inline">Refresh</span>
             </button>
             <button 
               onClick={() => setOpen(true)} 
@@ -647,19 +663,6 @@ export default function ManageUsersPage() {
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-        </div>
 
         {/* Error Message */}
         {error && (
@@ -698,7 +701,7 @@ export default function ManageUsersPage() {
         {/* Loading State */}
         {isLoading ? (
           <div className="card p-8 text-center">
-            <Loader2 size={32} className="animate-spin mx-auto mb-4 text-primary-600" />
+            <div className="loader mx-auto mb-4"></div>
             <div className="text-secondary-600">Loading users...</div>
           </div>
         ) : (
@@ -936,7 +939,7 @@ export default function ManageUsersPage() {
                   className="btn-primary text-sm px-4 py-2 flex items-center gap-2 disabled:opacity-50"
                   disabled={isSubmitting || !form.email || (!!form.password && !passwordValidation.isValid)}
                 >
-                  {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+                  {isSubmitting && <div className="loader w-4 h-4"></div>}
                   {isSubmitting ? 'Processing...' : (isEditing ? 'Update User' : 'Create User')}
                 </button>
               </div>
@@ -970,7 +973,7 @@ export default function ManageUsersPage() {
                 {/* Loading state for available items */}
                 {isLoadingAvailableItems && (
                   <div className="text-center py-4">
-                    <Loader2 size={24} className="animate-spin mx-auto mb-2 text-blue-600" />
+                    <div className="loader w-6 h-6 mx-auto mb-2"></div>
                     <div className="text-gray-600">Loading available items...</div>
                   </div>
                 )}

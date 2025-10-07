@@ -297,7 +297,7 @@ export default function BrandsPage() {
               title="Refresh brands"
             >
               <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-              <span className="hidden pl-1 sm:inline">Refresh</span>
+              <span className="hidden sm:inline">Refresh</span>
             </Button>
             {isAdmin() && (
               <UnifiedAddNew
