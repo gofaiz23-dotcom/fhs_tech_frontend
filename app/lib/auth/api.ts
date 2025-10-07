@@ -100,6 +100,7 @@ export async function testApiConnectivity(): Promise<{
   isReachable: boolean;
   status: number;
   error?: string;
+  details?: any;
 }> {
   try {
     console.log('🔍 Testing API connectivity to:', API_BASE_URL);
@@ -115,9 +116,20 @@ export async function testApiConnectivity(): Promise<{
     console.log('🔍 Health check response:', response.status);
     console.log('🔍 Health check headers:', Object.fromEntries(response.headers.entries()));
     
+    let responseData;
+    try {
+      responseData = await response.json();
+    } catch (parseError) {
+      console.log('🔍 Could not parse health check response as JSON');
+    }
+    
     return {
       isReachable: true,
       status: response.status,
+      details: {
+        headers: Object.fromEntries(response.headers.entries()),
+        data: responseData
+      }
     };
   } catch (error) {
     console.error('🔍 API connectivity test failed:', error);
@@ -125,6 +137,11 @@ export async function testApiConnectivity(): Promise<{
       isReachable: false,
       status: 0,
       error: error instanceof Error ? error.message : 'Unknown error',
+      details: {
+        errorType: error?.constructor?.name || 'Unknown',
+        isNetworkError: error instanceof TypeError,
+        isCorsError: error instanceof TypeError && error.message.includes('CORS')
+      }
     };
   }
 }
@@ -212,8 +229,22 @@ export class AuthService {
       console.error('❌ Auth: Error details:', {
         message: error instanceof Error ? error.message : 'Unknown error',
         statusCode: error instanceof AuthApiError ? error.statusCode : 'Unknown',
-        code: error instanceof AuthApiError ? error.code : 'Unknown'
+        code: error instanceof AuthApiError ? error.code : 'Unknown',
+        errorType: error?.constructor?.name || 'Unknown',
+        fullError: error
       });
+      
+      // Provide more user-friendly error messages
+      if (error instanceof AuthApiError) {
+        if (error.statusCode === 401) {
+          throw new AuthApiError('Invalid email or password. Please check your credentials and try again.', 401, 'INVALID_CREDENTIALS');
+        } else if (error.statusCode === 403) {
+          throw new AuthApiError('Access denied. Please contact your administrator.', 403, 'ACCESS_DENIED');
+        } else if (error.statusCode >= 500) {
+          throw new AuthApiError('Server error. Please try again later.', error.statusCode, 'SERVER_ERROR');
+        }
+      }
+      
       throw error;
     }
   }

@@ -61,15 +61,21 @@ export default function Navbar() {
             
             {/* Logo - Only show when sidebar is collapsed */}
             {sidebarCollapsed && (
-              <Link href="/dashboard" className="flex items-center sm:ml-2 md:ml-12 lg:ml-12">
-                  <Image src="/fhs-tech-logo.png" alt="brand logo" width={130} height={130} />
-                </Link>
+              <Link href="/dashboard" className="flex items-center">
+                <Image
+                  src="/fhs-tech-logo.png"
+                  alt="FHS Tech Logo"
+                  width={40}
+                  height={40}
+                  className="h-8 w-auto"
+                />
+              </Link>
             )}
           </div>
 
           {/* Right Section */}
           <div className="flex items-center gap-3">
-            {/* <ThemeToggle /> */}
+            <ThemeToggle />
             {state.isAuthenticated && state.user ? (
               <button
                 onClick={handleLogout}

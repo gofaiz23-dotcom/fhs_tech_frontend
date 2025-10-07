@@ -18,6 +18,7 @@ import {
   History,
   ShoppingBag,
   Truck,
+  X,
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { useTheme } from "next-themes";
@@ -28,11 +29,15 @@ import Image from "next/image";
 interface CollapsibleSidebarProps {
   isCollapsed: boolean;
   onToggle: () => void;
+  mobileMenuOpen?: boolean;
+  onMobileMenuToggle?: () => void;
 }
 
 export default function CollapsibleSidebar({
   isCollapsed,
   onToggle,
+  mobileMenuOpen = false,
+  onMobileMenuToggle,
 }: CollapsibleSidebarProps) {
   const pathname = usePathname();
   const { state } = useAuth();
@@ -185,7 +190,7 @@ export default function CollapsibleSidebar({
               ? "bg-indigo-900/20 text-indigo-300 border border-indigo-700"
               : "bg-indigo-50 text-indigo-700 border border-indigo-200"
             : resolvedTheme === 'dark'
-              ? "text-gray-300 hover:bg-gray-800 hover:text-gray-100"
+              ? "text-slate-300 hover:bg-gray-800 hover:text-slate-100"
               : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
         } ${isSubItem ? "ml-6 text-sm" : ""} ${
           isCollapsed ? "justify-center" : ""
@@ -199,8 +204,8 @@ export default function CollapsibleSidebar({
               active
                 ? resolvedTheme === 'dark' ? "text-indigo-400" : "text-indigo-500"
                 : resolvedTheme === 'dark' 
-                  ? "text-gray-500 group-hover:text-gray-400"
-                  : "text-gray-400 group-hover:text-gray-500"
+                  ? "text-slate-500 group-hover:text-slate-400"
+                  : "text-slate-400 group-hover:text-slate-500"
             }`
           )}
         </div>
@@ -234,7 +239,7 @@ export default function CollapsibleSidebar({
                   <div key={item.href}>
                     <Link href={item.href} className="flex items-center p-3 rounded-lg transition-colors group text-gray-700 hover:bg-gray-50 hover:text-gray-900">
                       <div className="flex-shrink-0 mr-3">
-                        {renderIcon(item.iconName, 20, "text-gray-400 group-hover:text-gray-500")}
+                        {renderIcon(item.iconName, 20, "text-slate-400 group-hover:text-slate-500")}
                       </div>
                       {!isCollapsed && <span className="font-medium">{item.label}</span>}
                     </Link>
@@ -247,13 +252,13 @@ export default function CollapsibleSidebar({
       </div>
     }>
       <div
-        className={`fixed top-0 left-0 h-full ${resolvedTheme === 'dark' ? 'bg-gray-900' : 'bg-white'} shadow-lg z-40 transform transition-all duration-300 ease-in-out ${
+        className={`fixed top-0 left-0 h-full ${resolvedTheme === 'dark' ? 'bg-slate-800 border-r border-slate-700' : 'bg-white'} shadow-lg z-40 transform transition-all duration-300 ease-in-out ${
           isCollapsed ? "w-16" : "w-64"
         } hidden md:block`}
       >
       <div className="flex flex-col h-full">
         {/* Header */}
-        <div className={`flex items-center justify-between p-4 border-b ${resolvedTheme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+        <div className={`flex items-center justify-between p-4 border-b ${resolvedTheme === 'dark' ? 'border-slate-700' : 'border-gray-200'}`}>
           {!isCollapsed && (
             <div className="flex items-center space-x-3">
               <Link href="/dashboard" className="flex items-center">
@@ -282,7 +287,7 @@ export default function CollapsibleSidebar({
 
         {/* User Profile */}
         {state.isAuthenticated && state.user && (
-          <div className={`p-4 border-b ${resolvedTheme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+          <div className={`p-4 border-b ${resolvedTheme === 'dark' ? 'border-slate-700' : 'border-gray-200'}`}>
             <div className="flex items-center space-x-3">
               <div
                 className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
@@ -294,10 +299,10 @@ export default function CollapsibleSidebar({
               </div>
               {!isCollapsed && (
                 <div className="flex-1 min-w-0">
-                  <div className={`text-sm font-medium truncate ${resolvedTheme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
+                  <div className={`text-sm font-medium truncate ${resolvedTheme === 'dark' ? 'text-slate-100' : 'text-gray-900'}`}>
                     {state.user.username}
                   </div>
-                  <div className={`text-xs flex items-center gap-1 ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <div className={`text-xs flex items-center gap-1 ${resolvedTheme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
                     <div
                       className={`w-2 h-2 rounded-full ${
                         (state.user.role || 'USER') === "ADMIN"
@@ -333,7 +338,7 @@ export default function CollapsibleSidebar({
                                 ? "bg-indigo-900/20 text-indigo-300"
                                 : "bg-indigo-50 text-indigo-700"
                               : resolvedTheme === 'dark'
-                                ? "text-gray-400 hover:bg-gray-800 hover:text-gray-100"
+                                ? "text-slate-400 hover:bg-gray-800 hover:text-slate-100"
                                 : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                           }`}
                         >
@@ -350,7 +355,7 @@ export default function CollapsibleSidebar({
             <div className="pt-4">
               <div className="flex items-center mb-3">
                 {!isCollapsed && (
-                  <span className={`text-xs font-semibold uppercase tracking-wider ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <span className={`text-xs font-semibold uppercase tracking-wider ${resolvedTheme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
                     Settings
                   </span>
                 )}
@@ -363,6 +368,180 @@ export default function CollapsibleSidebar({
         </div>
       </div>
     </div>
+
+      {/* Mobile Overlay */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          onClick={onMobileMenuToggle}
+        />
+      )}
+
+      {/* Mobile Sidebar */}
+      <div
+        className={`fixed top-0 left-0 h-full ${resolvedTheme === 'dark' ? 'bg-slate-800 border-r border-slate-700' : 'bg-white'} shadow-lg z-50 transform transition-all duration-300 ease-in-out w-64 md:hidden ${
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex flex-col h-full">
+          {/* Mobile Header */}
+          <div className={`flex items-center justify-between p-4 border-b ${resolvedTheme === 'dark' ? 'border-slate-700' : 'border-gray-200'}`}>
+            <div className="flex items-center space-x-3">
+              <Link href="/dashboard" className="flex items-center" onClick={onMobileMenuToggle}>
+                <Image
+                  src="/fhs-tech-logo.png"
+                  alt="brand logo"
+                  width={130}
+                  height={130}
+                />
+              </Link>
+            </div>
+            <button
+              onClick={onMobileMenuToggle}
+              className="p-2 rounded-lg hover:bg-blue-50 transition-colors"
+              aria-label="Close mobile menu"
+            >
+              <X size={20} className="text-blue-600" />
+            </button>
+          </div>
+
+          {/* Mobile User Profile */}
+          {state.isAuthenticated && state.user && (
+            <div className={`p-4 border-b ${resolvedTheme === 'dark' ? 'border-slate-700' : 'border-gray-200'}`}>
+              <div className="flex items-center space-x-3">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
+                    (state.user.role || 'USER') === "ADMIN" ? "bg-purple-500" : "bg-blue-500"
+                  }`}
+                >
+                  {state.user.username?.charAt(0).toUpperCase() ||
+                    state.user.email?.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className={`text-sm font-medium truncate ${resolvedTheme === 'dark' ? 'text-slate-100' : 'text-gray-900'}`}>
+                    {state.user.username}
+                  </div>
+                  <div className={`text-xs flex items-center gap-1 ${resolvedTheme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        (state.user.role || 'USER') === "ADMIN"
+                          ? "bg-purple-400"
+                          : "bg-blue-400"
+                      }`}
+                    ></div>
+                    {state.user.role || 'USER'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Navigation */}
+          <div className="flex-1 overflow-y-auto">
+            <nav className="space-y-1 p-4">
+              {/* Main Navigation */}
+              <div>
+                {mainNavigation.map((item) => (
+                  <div key={item.href}>
+                    <Link 
+                      href={item.href} 
+                      className="flex items-center p-3 rounded-lg transition-colors group"
+                      onClick={onMobileMenuToggle}
+                    >
+                      <div className="flex-shrink-0 mr-3">
+                        {renderIcon(
+                          item.iconName,
+                          20,
+                          `${ 
+                            item.active
+                              ? resolvedTheme === 'dark' ? "text-indigo-400" : "text-indigo-500"
+                              : resolvedTheme === 'dark' 
+                                ? "text-slate-500 group-hover:text-slate-400"
+                                : "text-slate-400 group-hover:text-slate-500"
+                          }`
+                        )}
+                      </div>
+                      <span className={`font-medium ${
+                        item.active
+                          ? resolvedTheme === 'dark' 
+                            ? "text-indigo-300"
+                            : "text-indigo-700"
+                          : resolvedTheme === 'dark'
+                            ? "text-slate-300"
+                            : "text-gray-700"
+                      }`}>{item.label}</span>
+                    </Link>
+                    {item.subItems && (
+                      <div className="mt-1 space-y-1">
+                        {item.subItems.map((subItem) => (
+                          <Link
+                            key={subItem.href}
+                            href={subItem.href}
+                            className={`flex items-center p-2 ml-6 text-sm rounded-lg transition-colors ${
+                              pathname === subItem.href
+                                ? resolvedTheme === 'dark' 
+                                  ? "bg-indigo-900/20 text-indigo-300"
+                                  : "bg-indigo-50 text-indigo-700"
+                                : resolvedTheme === 'dark'
+                                  ? "text-slate-400 hover:bg-gray-800 hover:text-slate-100"
+                                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                            }`}
+                            onClick={onMobileMenuToggle}
+                          >
+                            <span className="font-medium">{subItem.label}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Settings Section */}
+              <div className="pt-4">
+                <div className="flex items-center mb-3">
+                  <span className={`text-xs font-semibold uppercase tracking-wider ${resolvedTheme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Settings
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {settingsNavigation.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className="flex items-center p-3 rounded-lg transition-colors group"
+                      onClick={onMobileMenuToggle}
+                    >
+                      <div className="flex-shrink-0 mr-3">
+                        {renderIcon(
+                          item.iconName,
+                          20,
+                          `${ 
+                            item.active
+                              ? resolvedTheme === 'dark' ? "text-indigo-400" : "text-indigo-500"
+                              : resolvedTheme === 'dark' 
+                                ? "text-slate-500 group-hover:text-slate-400"
+                                : "text-slate-400 group-hover:text-slate-500"
+                          }`
+                        )}
+                      </div>
+                      <span className={`font-medium ${
+                        item.active
+                          ? resolvedTheme === 'dark' 
+                            ? "text-indigo-300"
+                            : "text-indigo-700"
+                          : resolvedTheme === 'dark'
+                            ? "text-slate-300"
+                            : "text-gray-700"
+                      }`}>{item.label}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </nav>
+          </div>
+        </div>
+      </div>
     </HydrationSafe>
   );
 }

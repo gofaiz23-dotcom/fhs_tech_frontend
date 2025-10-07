@@ -35,6 +35,18 @@ export default function HistoryPage() {
   // Search state
   const [searchTerm, setSearchTerm] = React.useState('');
 
+  // Filter users based on search term
+  const filteredUsers = React.useMemo(() => {
+    if (!searchTerm.trim()) return userLogs;
+    
+    const term = searchTerm.toLowerCase();
+    return userLogs.filter(user => 
+      user.username?.toLowerCase().includes(term) ||
+      user.email?.toLowerCase().includes(term) ||
+      user.role?.toLowerCase().includes(term)
+    );
+  }, [userLogs, searchTerm]);
+
   // Handle admin decision on retention
   const handleRetentionDecision = (notificationId: string, decision: 'keep' | 'delete') => {
     try {
@@ -237,12 +249,8 @@ export default function HistoryPage() {
     router.push('/login');
   };
 
-  // Filter users based on search term
-  const filteredUserLogs = userLogs.filter(user =>
-    getDisplayUsername(user.email).toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.role.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter users based on search term (using the new filteredUsers logic)
+  const filteredUserLogs = filteredUsers;
 
   return (
     <SettingsLayout>
@@ -251,33 +259,33 @@ export default function HistoryPage() {
           <div>
             <h2 className="text-xl font-semibold text-gray-800">System History</h2>
             <p className="text-sm text-gray-600 mt-1">
-              Track user activities and system changes
+              {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} total
+              {searchTerm && ` (filtered from ${userLogs.length})`}
             </p>
           </div>
-          <button
-            onClick={loadUsers}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
-            title="Refresh data"
-          >
-            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
-        </div>
-
-        {/* Search Bar */}
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="input-soft pl-10 pr-4 py-2 w-64"
+              />
+            </div>
+            <button
+              onClick={loadUsers}
+              disabled={isLoading}
+              className="btn-ghost text-sm flex items-center gap-2 disabled:opacity-50"
+              title="Refresh data"
+            >
+              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
           </div>
         </div>
+
 
         {/* API Debugger */}
         {/* <LoginHistoryDebugger /> */}
@@ -338,7 +346,7 @@ export default function HistoryPage() {
             {/* Loading State */}
             {isLoading ? (
               <div className="bg-white border rounded p-8 text-center">
-                <Loader2 size={32} className="animate-spin mx-auto mb-4 text-blue-600" />
+                <div className="loader mx-auto mb-4"></div>
                 <div className="text-gray-600">Loading user data...</div>
               </div>
             ) : (

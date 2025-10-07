@@ -69,7 +69,7 @@ export default function Navbar() {
 
           {/* Right Section */}
           <div className="flex items-center gap-3">
-            {/* <ThemeToggle /> */}
+            <ThemeToggle />
             {state.isAuthenticated && state.user ? (
               <button
                 onClick={handleLogout}

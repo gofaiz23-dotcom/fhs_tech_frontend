@@ -1,7 +1,7 @@
 "use client"
 
 import React from 'react';
-import { AlertTriangle, X, Loader2 } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 import { Button } from './ui/button';
 
 interface DeleteUserModalProps {
@@ -176,7 +176,7 @@ const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
           >
             {isDeleting ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <div className="loader w-4 h-4 mr-2"></div>
                 Deleting...
               </>
             ) : (

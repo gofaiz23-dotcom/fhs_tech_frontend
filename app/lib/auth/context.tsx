@@ -10,7 +10,7 @@
 
 import React, { createContext, useContext, useEffect, ReactNode } from 'react';
 import { User, UserProfile } from './types';
-import { AuthService, ensureValidToken } from './api';
+import { AuthService, ensureValidToken, AuthApiError } from './api';
 import { HttpClient } from './httpClient';
 import { useAuthStore } from '../stores/authStore';
 import { activityLogger } from '../activity-logger';
@@ -190,7 +190,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      console.error('❌ Login error in context:', error);
+      
+      let errorMessage = 'Login failed';
+      
+      if (error instanceof AuthApiError) {
+        errorMessage = error.message;
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      // Provide fallback error message if none is available
+      if (!errorMessage || errorMessage === 'Login failed') {
+        errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
+      }
+      
       setError(errorMessage);
       throw error;
     }

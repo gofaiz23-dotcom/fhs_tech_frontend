@@ -1,7 +1,7 @@
 "use client";
 import SettingsLayout from "../_components/SettingsLayout";
 import React from "react";
-import { Settings, AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import { Settings, AlertCircle, RefreshCw, Search } from "lucide-react";
 import { AdminService, AdminUtils } from "../../lib/admin";
 import { useAuth } from "../../lib/auth";
 import type { DetailedUser } from "../../lib/admin/types";
@@ -43,6 +43,7 @@ export default function AccessControlPage() {
   // UI state
   const [showGrantAccess, setShowGrantAccess] = React.useState<DetailedUser | null>(null);
   const [showPermissions, setShowPermissions] = React.useState<{ user: DetailedUser; type: 'brands' | 'marketplaces' | 'shippingPlatforms' } | null>(null);
+  const [searchTerm, setSearchTerm] = React.useState('');
 
   // Loading state for toggle operations
   const [togglingItems, setTogglingItems] = React.useState<Set<string>>(new Set());
@@ -561,28 +562,52 @@ export default function AccessControlPage() {
     return gradients[userId % gradients.length];
   };
 
+  // Filter users based on search term
+  const filteredUsers = React.useMemo(() => {
+    if (!searchTerm.trim()) return users;
+    
+    const term = searchTerm.toLowerCase();
+    return users.filter(user => 
+      user.username?.toLowerCase().includes(term) ||
+      user.email?.toLowerCase().includes(term) ||
+      user.role?.toLowerCase().includes(term)
+    );
+  }, [users, searchTerm]);
 
   return (
     <SettingsLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-        <h2 className="text-xl font-semibold text-gray-800">Access Control</h2>
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-slate-100 dark:text-slate-100">Access Control</h2>
             {!isLoading && (
-              <p className="text-sm text-gray-600 mt-1">
-                {users.length} user{users.length !== 1 ? 's' : ''} total
+              <p className="text-sm text-gray-600 dark:text-slate-400 dark:text-slate-400 mt-1">
+                {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} total
+                {searchTerm && ` (filtered from ${users.length})`}
               </p>
             )}
           </div>
-          <button
-            onClick={loadUsers}
-            disabled={isLoading}
-            className="btn-ghost text-sm flex items-center gap-2 disabled:opacity-50"
-            title="Refresh users"
-          >
-            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="input-soft pl-10 pr-4 py-2 w-64"
+              />
+            </div>
+            <button
+              onClick={loadUsers}
+              disabled={isLoading}
+              className="btn-ghost text-sm flex items-center gap-2 disabled:opacity-50"
+              title="Refresh users"
+            >
+              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
         </div>
 
         {/* Error Message */}
@@ -620,95 +645,91 @@ export default function AccessControlPage() {
         {/* Loading State */}
         {isLoading ? (
           <div className="card p-8 text-center">
-            <Loader2 size={32} className="animate-spin mx-auto mb-4 text-primary-600" />
+            <div className="loader mx-auto mb-4"></div>
             <div className="text-secondary-600">Loading users...</div>
           </div>
         ) : (
-          <div className="card overflow-hidden">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="text-left text-secondary-600 border-b bg-secondary-50">
-                  <th className="py-3 px-4">User</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Brands</th>
-                  <th className="py-3 px-4">Marketplaces</th>
-                  <th className="py-3 px-4">Shipping</th>
-                  <th className="py-3 px-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-          {users.map(user => (
-                  <tr key={user.id} className="border-b last:border-b-0 hover:bg-secondary-50">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <span className={`h-8 w-8 rounded-full ${getAvatarClass(user.id)}`}></span>
-                          {/* Online status indicator */}
-                          {/* {user.loginStats?.currentSession?.isActive && (
-                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
-                          )} */}
-                        </div>
-                        <div>
-                          <div className="font-medium text-gray-800">{getDisplayUsername(user)}</div>
-                          <div className="text-xs text-gray-500 flex items-center gap-2">
-                            {/* <span className={`inline-block w-2 h-2 rounded-full `}></span> */}
-                            {/* <span className={`inline-block w-2 h-2 rounded-full ${user.role === 'ADMIN' ? 'bg-purple-500' : 'bg-blue-500'}`}></span> */}
-                            {user.role}
+          <div className="card overflow-x-auto">
+            <div className="min-w-full">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-secondary-600 dark:text-slate-400 border-b bg-secondary-50 dark:bg-slate-800">
+                    <th className="py-3 px-4 min-w-[200px]">User</th>
+                    <th className="py-3 px-4 min-w-[100px]">Status</th>
+                    <th className="py-3 px-4 min-w-[120px]">Brands</th>
+                    <th className="py-3 px-4 min-w-[140px]">Marketplaces</th>
+                    <th className="py-3 px-4 min-w-[120px]">Shipping</th>
+                    <th className="py-3 px-4 min-w-[140px]">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map(user => (
+                    <tr key={user.id} className="border-b last:border-b-0 hover:bg-secondary-50 dark:hover:bg-slate-800">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <span className={`h-8 w-8 rounded-full ${getAvatarClass(user.id)}`}></span>
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-800 dark:text-slate-100 dark:text-slate-100">{getDisplayUsername(user)}</div>
+                            <div className="text-xs text-gray-500 dark:text-slate-400 dark:text-slate-400 flex items-center gap-2">
+                              {user.role}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </td>
-                     <td className="py-3 px-4">
-                       {user.loginStats?.currentSession?.isActive ? (
-                         <span className="text-green-600 animate-pulse text-sm font-medium">Active</span>
-                       ) : (
-                         <span className="text-gray-500 text-sm">Offline</span>
-                       )}
-                     </td>
-                    <td className="py-3 px-4">
-                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                        {getPermissionCount(user, 'brands')}/{getTotalCount(user, 'brands')}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                        {getPermissionCount(user, 'marketplaces')}/{getTotalCount(user, 'marketplaces')}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
-                        {getPermissionCount(user, 'shippingPlatforms')}/{getTotalCount(user, 'shippingPlatforms')}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <button
-                        onClick={() => setShowGrantAccess(user)}
-                        className="btn-primary text-xs px-3 py-2 flex items-center gap-1"
-                        title="View permissions (read-only)"
-                      >
-                        <Settings size={14} />
-                        View Access
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {users.length === 0 && (
-                  <tr>
-                    <td className="py-8 px-4 text-center text-gray-500" colSpan={6}>
-                      No users found. {authState.user?.role === 'ADMIN' ? 'Create users in Manage Users to get started.' : 'Contact your administrator to add users.'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                      </td>
+                      <td className="py-3 px-4">
+                        {user.loginStats?.currentSession?.isActive ? (
+                          <span className="text-green-600 animate-pulse text-sm font-medium">Active</span>
+                        ) : (
+                          <span className="text-gray-500 dark:text-slate-400 text-sm">Offline</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                          {getPermissionCount(user, 'brands')}/{getTotalCount(user, 'brands')}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                          {getPermissionCount(user, 'marketplaces')}/{getTotalCount(user, 'marketplaces')}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                          {getPermissionCount(user, 'shippingPlatforms')}/{getTotalCount(user, 'shippingPlatforms')}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <button
+                          onClick={() => setShowGrantAccess(user)}
+                          className="btn-primary text-xs px-3 py-2 flex items-center gap-1"
+                          title="View permissions (read-only)"
+                        >
+                          <Settings size={14} />
+                          View Access
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {users.length === 0 && (
+                    <tr>
+                      <td className="py-8 px-4 text-center text-gray-500 dark:text-slate-400" colSpan={6}>
+                        No users found. {authState.user?.role === 'ADMIN' ? 'Create users in Manage Users to get started.' : 'Contact your administrator to add users.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
         {showGrantAccess && (
-          <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-            <div className="card p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+            <div className="card p-4 sm:p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-6">
-                <div className="text-lg font-semibold text-gray-800">View Access - {getDisplayUsername(showGrantAccess)}</div>
+                <div className="text-lg font-semibold text-gray-800 dark:text-slate-100 dark:text-slate-100">View Access - {getDisplayUsername(showGrantAccess)}</div>
                 <button className="text-gray-400 hover:text-red-500 transition-colors" onClick={() => setShowGrantAccess(null)}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -721,7 +742,7 @@ export default function AccessControlPage() {
               {isLoadingAccessData && (
                 <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <Loader2 size={16} className="animate-spin text-blue-600" />
+                    <div className="loader w-4 h-4"></div>
                     <div className="text-blue-800 text-sm">
                       Loading access control data...
                     </div>
@@ -731,54 +752,56 @@ export default function AccessControlPage() {
 
               {/* Bulk Actions */}
               <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"></div>
+                    <div className="w-4 h-4 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full flex-shrink-0"></div>
                     <div>
-                      <h3 className="font-semibold text-gray-800">Bulk Actions</h3>
-                      <p className="text-sm text-gray-600">Quickly manage all permissions at once</p>
+                      <h3 className="font-semibold text-gray-800 dark:text-slate-100 dark:text-slate-100">Bulk Actions</h3>
+                      <p className="text-sm text-gray-600 dark:text-slate-400 dark:text-slate-400">Quickly manage all permissions at once</p>
                     </div>
                   </div>
-                  <div className="flex gap-3">
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                     <button
                       onClick={handleAllowAll}
-                      className="btn-success text-sm px-4 py-2 flex items-center gap-2"
+                      className="btn-success text-sm px-3 sm:px-4 py-2 flex items-center justify-center gap-2 w-full sm:w-auto"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
-                      Allow All
+                      <span className="hidden sm:inline">Allow All</span>
+                      <span className="sm:hidden">Allow All</span>
                     </button>
                     <button
                       onClick={handleRemoveAll}
-                      className="btn-danger text-sm px-4 py-2 flex items-center gap-2"
+                      className="btn-danger text-sm px-3 sm:px-4 py-2 flex items-center justify-center gap-2 w-full sm:w-auto"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
-                      Remove All
+                      <span className="hidden sm:inline">Remove All</span>
+                      <span className="sm:hidden">Remove All</span>
                     </button>
                   </div>
                 </div>
               </div>
 
               {/* Grid Layout - All Categories */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
                 {/* Brands Column */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-                    <h3 className="text-lg font-semibold text-gray-800">Brands</h3>
-                    <span className="text-sm text-gray-500">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100 dark:text-slate-100">Brands</h3>
+                    <span className="text-sm text-gray-500 dark:text-slate-400 dark:text-slate-400">
                       ({Object.values(brandAccess).filter(Boolean).length}/{brands?.length || 0})
                     </span>
                   </div>
                   <div className="space-y-3">
                     {brands?.map((brand) => (
-                      <div key={brand.id} className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
+                      <div key={brand.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:shadow-sm transition-shadow">
                         <div className="flex-1">
-                          <div className="font-medium text-gray-900">{brand.name}</div>
-                          <div className="text-sm text-gray-500">{brand.description}</div>
+                          <div className="font-medium text-gray-900 dark:text-slate-100">{brand.name}</div>
+                          <div className="text-sm text-gray-500 dark:text-slate-400">{brand.description}</div>
                         </div>
                         <AppleToggle
                           checked={brandAccess[brand.id] || false}
@@ -794,17 +817,17 @@ export default function AccessControlPage() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-                    <h3 className="text-lg font-semibold text-gray-800">Marketplaces</h3>
-                    <span className="text-sm text-gray-500">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100">Marketplaces</h3>
+                    <span className="text-sm text-gray-500 dark:text-slate-400">
                       ({Object.values(marketplaceAccess).filter(Boolean).length}/{marketplaces?.length || 0})
                     </span>
                   </div>
                   <div className="space-y-3">
                     {marketplaces?.map((marketplace) => (
-                      <div key={marketplace.id} className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
+                      <div key={marketplace.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:shadow-sm transition-shadow">
                         <div className="flex-1">
-                          <div className="font-medium text-gray-900">{marketplace.name}</div>
-                          <div className="text-sm text-gray-500">{marketplace.description}</div>
+                          <div className="font-medium text-gray-900 dark:text-slate-100">{marketplace.name}</div>
+                          <div className="text-sm text-gray-500 dark:text-slate-400">{marketplace.description}</div>
                         </div>
                         <AppleToggle
                           checked={marketplaceAccess[marketplace.id] || false}
@@ -820,17 +843,17 @@ export default function AccessControlPage() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
-                    <h3 className="text-lg font-semibold text-gray-800">Shipping Platforms</h3>
-                    <span className="text-sm text-gray-500">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100">Shipping Platforms</h3>
+                    <span className="text-sm text-gray-500 dark:text-slate-400">
                       ({Object.values(shippingAccess).filter(Boolean).length}/{shippingPlatforms?.length || 0})
                     </span>
                   </div>
                   <div className="space-y-3">
                     {shippingPlatforms?.map((shipping) => (
-                      <div key={shipping.id} className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
+                      <div key={shipping.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:shadow-sm transition-shadow">
                         <div className="flex-1">
-                          <div className="font-medium text-gray-900">{shipping.name}</div>
-                          <div className="text-sm text-gray-500">{shipping.description}</div>
+                          <div className="font-medium text-gray-900 dark:text-slate-100">{shipping.name}</div>
+                          <div className="text-sm text-gray-500 dark:text-slate-400">{shipping.description}</div>
                         </div>
                         <AppleToggle
                           checked={shippingAccess[shipping.id] || false}
@@ -844,8 +867,8 @@ export default function AccessControlPage() {
               </div>
 
               
-              <div className="flex justify-between items-center mt-6">
-                <div className="text-sm text-gray-500">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-6 gap-4">
+                <div className="text-sm text-gray-500 dark:text-slate-400">
                   {hasPermissionChanges() && (
                     <span className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
@@ -853,10 +876,10 @@ export default function AccessControlPage() {
                     </span>
                   )}
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                   <button
                     onClick={() => setShowGrantAccess(null)}
-                    className="btn-secondary text-sm px-6 py-2 disabled:opacity-50"
+                    className="btn-secondary text-sm px-4 sm:px-6 py-2 disabled:opacity-50 w-full sm:w-auto"
                     disabled={isSavingChanges}
                   >
                     Close
@@ -864,9 +887,9 @@ export default function AccessControlPage() {
                   <button
                     onClick={savePermissionChanges}
                     disabled={!hasPermissionChanges() || isSavingChanges}
-                    className="btn-primary text-sm px-6 py-2 disabled:opacity-50 flex items-center gap-2"
+                    className="btn-primary text-sm px-4 sm:px-6 py-2 disabled:opacity-50 flex items-center justify-center gap-2 w-full sm:w-auto"
                   >
-                    {isSavingChanges && <Loader2 size={16} className="animate-spin" />}
+                    {isSavingChanges && <div className="loader w-4 h-4"></div>}
                     Save Changes
                   </button>
                 </div>

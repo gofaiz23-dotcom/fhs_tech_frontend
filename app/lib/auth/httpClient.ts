@@ -35,7 +35,8 @@ export class HttpClient {
       console.log('🌐 HTTP: Request options:', {
         method: options.method || 'GET',
         hasBody: !!options.body,
-        hasHeaders: !!options.headers
+        hasHeaders: !!options.headers,
+        credentials: 'include'
       });
       
       // Additional debugging for cookie issues
@@ -82,7 +83,7 @@ export class HttpClient {
 
       if (!response.ok) {
         const error = data;
-        const errorMessage = error?.error || `HTTP error: ${response.statusText}`;
+        const errorMessage = error?.error || error?.message || `HTTP error: ${response.statusText}`;
         const errorCode = error?.code?.toString() || response.status.toString();
         
         console.error('❌ HTTP: Request failed:', {
@@ -105,7 +106,9 @@ export class HttpClient {
           isClientError: response.status >= 400 && response.status < 500,
           isAuthError: response.status === 401 || response.status === 403,
           contentType: response.headers.get('content-type'),
-          cookies: typeof document !== 'undefined' ? document.cookie : 'server-side'
+          cookies: typeof document !== 'undefined' ? document.cookie : 'server-side',
+          responseText: data,
+          errorObject: error
         });
         
         throw new AuthApiError(

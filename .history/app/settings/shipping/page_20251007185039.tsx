@@ -270,7 +270,7 @@ export default function ShippingPage() {
               title="Refresh shipping companies"
             >
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-              <span className="hidden sm:inline">Refresh</span>
+              <span className="pl-1 hidden sm:inline">Refresh</span>
             </button>
             {isAdminUser && (
               <UnifiedAddNew

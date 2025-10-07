@@ -3,9 +3,9 @@ import Image from "next/image";
 import Link from "next/link";
 import React from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
+import { Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useAuth } from "../lib/auth/context";
-import { AuthApiError } from "../lib/auth/api";
+import { AuthApiError, testApiConnectivity } from "../lib/auth/api";
 import { validatePassword, getPasswordStrengthColor, getPasswordStrengthText } from "../lib/utils/passwordValidation";
 
 export default function LoginPage() {
@@ -22,6 +22,9 @@ export default function LoginPage() {
   // Password validation state
   const [passwordValidation, setPasswordValidation] = React.useState(validatePassword(""));
   const [showPasswordValidation, setShowPasswordValidation] = React.useState(false);
+  
+  // Debug state
+  const [debugInfo, setDebugInfo] = React.useState<string>("");
 
   // Redirect if already authenticated
   React.useEffect(() => {
@@ -42,6 +45,19 @@ export default function LoginPage() {
     const validation = validatePassword(password);
     setPasswordValidation(validation);
   }, [password]);
+
+  /**
+   * Test API connectivity for debugging
+   */
+  const testConnectivity = async () => {
+    try {
+      setDebugInfo("Testing connectivity...");
+      const result = await testApiConnectivity();
+      setDebugInfo(JSON.stringify(result, null, 2));
+    } catch (error) {
+      setDebugInfo(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
 
   /**
    * Handle form submission
@@ -185,7 +201,7 @@ export default function LoginPage() {
               className="w-full btn-primary py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isSubmitting || !email.trim() || !password.trim() || !passwordValidation.isValid}
             >
-              {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+              {isSubmitting && <div className="loader w-4 h-4"></div>}
               {isSubmitting ? 'Logging in...' : 'Log In'}
             </button>
           </form>
@@ -202,6 +218,22 @@ export default function LoginPage() {
             Don&apos;t Have An Account? <Link href="#" className="text-blue-200 hover:underline">Register Now.</Link>
           </div> */}
           <div className="text-[10px] text-white/60 mt-6">Privacy Policy</div>
+          
+          {/* Debug Section - Remove in production */}
+          <div className="mt-4 pt-4 border-t border-white/20">
+            <button 
+              type="button"
+              onClick={testConnectivity}
+              className="text-xs text-white/60 hover:text-white/80 underline"
+            >
+              Test API Connectivity
+            </button>
+            {debugInfo && (
+              <pre className="mt-2 text-xs text-white/60 bg-black/20 p-2 rounded overflow-auto max-h-32">
+                {debugInfo}
+              </pre>
+            )}
+          </div>
         </div>
       </div>
     </div>
