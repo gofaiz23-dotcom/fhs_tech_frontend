@@ -81,7 +81,7 @@ async function adminApiRequest<T>(url: string, options: RequestInit = {}, access
     const endpoint = url.replace(API_BASE_URL, '');
     
     // Use HttpClient with authenticated request (handles token refresh automatically)
-    return await HttpClient.authenticatedRequest(endpoint, {
+    return await HttpClient.request<T>(endpoint, {
       ...options,
       headers: {
         'Authorization': `Bearer ${validToken}`,
