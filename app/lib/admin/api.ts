@@ -247,14 +247,13 @@ export class AdminService {
       // Test if endpoint is reachable first
       console.log('🔍 API: Testing endpoint reachability...');
       try {
-        const testResponse = await HttpClient.request(ADMIN_ENDPOINTS.UPDATE_USERNAME(userId).replace(API_BASE_URL, ''), {
+        await HttpClient.request(ADMIN_ENDPOINTS.UPDATE_USERNAME(userId).replace(API_BASE_URL, ''), {
           method: 'OPTIONS', // Use OPTIONS to test connectivity without side effects
           headers: {
             'Authorization': `Bearer ${accessToken}`,
           }
         });
-        console.log('🔍 API: Test response status:', testResponse.status);
-        console.log('🔍 API: Test response headers:', Object.fromEntries(testResponse.headers.entries()));
+        console.log('🔍 API: Test request successful - endpoint is reachable');
       } catch (testError) {
         console.log('🔍 API: Test request failed:', testError);
       }
