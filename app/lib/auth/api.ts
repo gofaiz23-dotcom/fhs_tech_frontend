@@ -25,7 +25,7 @@ import {
 import { HttpClient } from './httpClient';
 
 // Base API configuration
-const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL = 'https://fhs-tech-backend.onrender.com/api';
 const AUTH_ENDPOINTS = {
   LOGIN: `${API_BASE_URL}/auth/login`,
   REGISTER: `${API_BASE_URL}/auth/register`,
@@ -263,30 +263,29 @@ export class AuthService {
   /**
    * Refresh access token using the refresh token
    * 
+   * This endpoint uses HttpOnly cookies for refresh token authentication.
+   * No request body is needed as the refresh token is sent automatically via cookie.
+   * 
    * @returns Promise<RefreshResponse> - New access token
    */
   static async refreshToken(): Promise<RefreshResponse> {
     try {
       console.log('🔄 Auth: Attempting token refresh...');
-      console.log('🔄 Auth: Sending request to /auth/refresh with cookies');
+      console.log('🔄 Auth: Sending POST request to /auth/refresh');
+      console.log('🔄 Auth: Request body: None (refresh token sent via HttpOnly cookie)');
       console.log('🔄 Auth: Current domain:', typeof window !== 'undefined' ? window.location.origin : 'server-side');
       console.log('🔄 Auth: Backend domain:', API_BASE_URL);
-      console.log('🔄 Auth: Cookies available:', typeof document !== 'undefined' ? document.cookie : 'server-side');
+      console.log('🔄 Auth: Note: HttpOnly cookies are not visible to JavaScript');
       
-      // Check specifically for refresh token cookie
-      if (typeof document !== 'undefined') {
-        const cookies = document.cookie.split(';').map(c => c.trim());
-        const refreshTokenCookie = cookies.find(c => c.startsWith('refreshToken='));
-        console.log('🔄 Auth: Refresh token cookie found:', !!refreshTokenCookie);
-        if (refreshTokenCookie) {
-          console.log('🔄 Auth: Refresh token cookie value (first 20 chars):', refreshTokenCookie.substring(0, 30) + '...');
-        }
-      }
-      
+      // Make POST request to /auth/refresh with no body
+      // The refresh token is automatically sent via HttpOnly cookie
       const response = await HttpClient.post<RefreshResponse>('/auth/refresh');
 
       console.log('✅ Auth: Token refresh successful');
       console.log('🔑 Auth: Received new access token:', response.accessToken ? 'Yes' : 'No');
+      console.log('📝 Auth: Response message:', response.message || 'No message');
+      console.log('🍪 Auth: HttpOnly cookie was sent with request (not visible to JS)');
+      
       return response;
     } catch (error) {
       console.log('⚠️ Auth: Token refresh failed:', error);
@@ -294,10 +293,20 @@ export class AuthService {
       // Provide more specific error messages for refresh token failures
       if (error instanceof AuthApiError) {
         if (error.statusCode === 401) {
-          throw new AuthApiError('Refresh token expired or invalid', 401, 'REFRESH_TOKEN_EXPIRED');
+          console.log('🍪 Auth: Invalid refresh token (401)');
+          console.log('💡 Auth: This means the refresh token is expired or invalid');
+          console.log('💡 Auth: User needs to login again');
+          throw new AuthApiError('Invalid refresh token', 401, 'REFRESH_TOKEN_EXPIRED');
         } else if (error.statusCode === 403) {
+          console.log('🍪 Auth: Refresh token not provided (403)');
+          console.log('💡 Auth: This usually means sameSite="strict" blocks cross-domain cookies');
+          console.log('💡 Auth: Or the HttpOnly cookie was not set properly');
           throw new AuthApiError('Refresh token not provided', 403, 'REFRESH_TOKEN_MISSING');
         }
+      } else if (error instanceof Error && error.message.includes('Invalid refresh token')) {
+        console.log('🍪 Auth: Backend reports "Invalid refresh token"');
+        console.log('💡 Auth: This means the refresh token is expired or malformed');
+        throw new AuthApiError('Invalid refresh token', 401, 'REFRESH_TOKEN_EXPIRED');
       }
       
       // For network errors or other issues, provide a more user-friendly message
@@ -308,21 +317,47 @@ export class AuthService {
   /**
    * Logout user and invalidate tokens
    * 
+   * This endpoint requires the access token in the Authorization header
+   * and sends the refresh token via HttpOnly cookie to invalidate both tokens.
+   * 
    * @param accessToken - Current access token
    * @returns Promise<LogoutResponse> - Logout confirmation
    */
   static async logout(accessToken: string): Promise<LogoutResponse> {
     try {
+      console.log('🚪 Auth: Attempting logout...');
+      console.log('🚪 Auth: Sending POST request to /auth/logout');
+      console.log('🚪 Auth: Authorization header: Bearer token provided');
+      console.log('🚪 Auth: Refresh token: Sent via HttpOnly cookie');
+      console.log('🚪 Auth: Request body: None');
+      
       const response = await HttpClient.post<LogoutResponse>('/auth/logout', {}, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       });
+      
       console.log('✅ Auth: Logout successful');
+      console.log('📝 Auth: Response message:', response.message || 'No message');
+      console.log('🔒 Auth: Both access and refresh tokens invalidated on server');
+      
       return response;
     } catch (error) {
       console.error('❌ Auth: Logout error:', error);
+      
+      // Provide more specific error messages for logout failures
+      if (error instanceof AuthApiError) {
+        if (error.statusCode === 401) {
+          console.log('🚪 Auth: Invalid access token (401)');
+          console.log('💡 Auth: Access token may be expired or invalid');
+        } else if (error.statusCode === 403) {
+          console.log('🚪 Auth: Access denied (403)');
+          console.log('💡 Auth: User may not have permission to logout');
+        }
+      }
+      
       // Continue with logout even if server call fails
+      // The client-side state should still be cleared
       throw error;
     }
   }
@@ -334,11 +369,16 @@ export class AuthService {
    * @returns Promise<ProfileResponse> - User profile with permissions
    */
   static async getProfile(accessToken: string): Promise<ProfileResponse> {
-    return HttpClient.get<ProfileResponse>('/auth/profile', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
+    const result = await HttpClient.get<ProfileResponse>('/auth/profile', {}, accessToken);
+    
+    // Check if a new token was returned and extract it
+    if (result && typeof result === 'object' && '_newAccessToken' in result) {
+      const { _newAccessToken, ...actualResult } = result as any;
+      // Return the actual profile data
+      return actualResult as ProfileResponse;
+    }
+    
+    return result;
   }
 
   /**
@@ -445,24 +485,9 @@ export async function ensureValidToken(currentToken: string | null): Promise<str
       }
     }
 
-    // Check if token is expired or will expire in the next 5 minutes
-    const payload = JSON.parse(atob(currentToken.split('.')[1]));
-    const currentTime = Date.now() / 1000;
-    const bufferTime = 300; // 5 minutes buffer
-    
-    if (payload.exp <= currentTime + bufferTime) {
-      // Token is expired or will expire soon - REFRESH IT!
-      console.log('🔄 Token expiring soon, refreshing...');
-      try {
-        const refreshResponse = await AuthService.refreshToken();
-        console.log('✅ Successfully refreshed expiring token');
-        return refreshResponse.accessToken;
-      } catch (error) {
-        console.log('⚠️ Token refresh failed, user needs to login again');
-        return null;
-      }
-    }
-    
+    // For lazy refresh approach, we don't proactively check expiration
+    // The HttpClient will handle 401 responses and refresh tokens automatically
+    console.log('✅ Token available, will be validated on API call');
     return currentToken;
   } catch (error) {
     console.log('⚠️ Token validation failed, attempting refresh...');

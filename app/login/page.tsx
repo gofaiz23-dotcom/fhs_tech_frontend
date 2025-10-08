@@ -220,7 +220,7 @@ export default function LoginPage() {
           <div className="text-[10px] text-white/60 mt-6">Privacy Policy</div>
           
           {/* Debug Section - Remove in production */}
-          <div className="mt-4 pt-4 border-t border-white/20">
+          {/* <div className="mt-4 pt-4 border-t border-white/20">
             <button 
               type="button"
               onClick={testConnectivity}
@@ -233,7 +233,7 @@ export default function LoginPage() {
                 {debugInfo}
               </pre>
             )}
-          </div>
+          </div> */}
         </div>
       </div>
     </div>

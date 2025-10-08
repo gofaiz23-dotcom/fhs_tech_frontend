@@ -69,7 +69,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * This handles page refresh scenarios where in-memory state is lost.
    */
   useEffect(() => {
+    let isInitialized = false;
+
     async function initializeAuth() {
+      if (isInitialized) {
+        console.log('🔄 Auth: Initialization already in progress, skipping...');
+        return;
+      }
+      
+      // Skip initialization if we're on auth-related pages where user shouldn't be authenticated
+      if (typeof window !== 'undefined') {
+        const currentPath = window.location.pathname;
+        const skipAuthPages = ['/login', '/register', '/forgot-password', '/reset-password'];
+        
+        if (skipAuthPages.includes(currentPath)) {
+          console.log('🔄 Auth: On auth page, skipping authentication initialization');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      isInitialized = true;
+      
       try {
         console.log('🔄 Auth: Starting initialization...', { 
           hasToken: !!accessToken, 
@@ -113,10 +134,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        // No stored token or stored token is invalid - user needs to login
-        console.log('⚠️ Auth: No valid access token found, user needs to login');
-        setLoading(false);
-        return;
+        // No stored token or stored token is invalid - try refresh token
+        console.log('⚠️ Auth: No valid access token found, trying refresh token...');
+        
+        try {
+          // Try to get new token using refresh token (HttpOnly cookie)
+          console.log('🔄 Auth: Attempting refresh token request...');
+          const refreshResponse = await AuthService.refreshToken();
+          console.log('✅ Auth: Successfully refreshed token from HttpOnly cookie');
+          
+          // Get user profile with the new token
+          console.log('👤 Auth: Fetching user profile with refreshed token...');
+          const profileResponse = await AuthService.getProfile(refreshResponse.accessToken);
+          console.log('✅ Auth: Profile fetched successfully');
+          
+          updateAuthState({
+            user: profileResponse.user,
+            accessToken: refreshResponse.accessToken,
+          });
+          console.log('✅ Auth: Session restored successfully with refresh token');
+          return;
+        } catch (refreshError) {
+          console.log('⚠️ Auth: Refresh token failed, user needs to login:', refreshError);
+          
+          // Check if it's a specific refresh token error
+          if (refreshError instanceof Error && refreshError.message.includes('Refresh token not provided')) {
+            console.log('🍪 Auth: HttpOnly cookie not found - user needs to login again');
+            console.log('💡 Auth: This usually means the cookie expired or sameSite policy blocks it');
+            console.log('🔧 Auth: Backend needs to set cookie with sameSite: "none" for cross-domain');
+          }
+          
+          // Clear any stored token since refresh failed
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('fhsfbe625');
+          }
+          
+          setLoading(false);
+          return;
+        }
       } catch (error) {
         console.error('❌ Auth: Failed to initialize:', error);
         console.log('❌ Auth: Setting loading to false');
@@ -124,12 +179,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Initialize auth when component mounts
-    if (isLoading) {
-      console.log('🚀 Auth: Initializing...');
-      initializeAuth();
-    }
-  }, [isLoading, setLoading, updateAuthState]);
+    // Initialize auth when component mounts (only once)
+    console.log('🚀 Auth: Component mounted, starting initialization...');
+    initializeAuth();
+  }, []); // Empty dependency array - run only once on mount
 
   // Fallback timeout to prevent infinite loading
   useEffect(() => {
@@ -215,22 +268,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /**
    * Logout current user
    * 
-   * Clears all authentication data and invalidates server tokens
+   * Clears all authentication data and invalidates server tokens.
+   * Always clears local state even if server logout fails.
    */
   const logout = async (): Promise<void> => {
     try {
-      // Logout with access token
+      console.log('🚪 Logout: Starting logout process...');
+      
+      // Logout with access token if available
       if (accessToken) {
+        console.log('🚪 Logout: Sending logout request to server...');
         await AuthService.logout(accessToken);
-        console.log('✅ Logout: Server tokens invalidated');
+        console.log('✅ Logout: Server tokens invalidated successfully');
+      } else {
+        console.log('⚠️ Logout: No access token available, skipping server logout');
       }
     } catch (error) {
-      console.error('❌ Logout error:', error);
-      // Continue with logout even if server call fails
+      console.error('❌ Logout: Server logout failed:', error);
+      console.log('⚠️ Logout: Continuing with client-side logout despite server error');
+      
+      // Don't throw the error - we want to continue with client-side logout
+      // The user should still be logged out locally even if server call fails
     } finally {
+      // Always clear local authentication state
+      console.log('🧹 Logout: Clearing local authentication state...');
       logoutStore();
+      
       // Redirect to login page after logout
       if (typeof window !== 'undefined') {
+        console.log('🔄 Logout: Redirecting to login page...');
         window.location.href = '/login';
       }
     }

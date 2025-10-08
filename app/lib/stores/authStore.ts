@@ -45,13 +45,16 @@ const initialState: AuthState = {
 };
 
 /**
- * Authentication store with memory-only storage
+ * Authentication store with localStorage persistence for access token
  * 
- * Uses in-memory storage only for security. Authentication state is restored
- * on app initialization using HttpOnly cookies via the refresh token API.
+ * Stores access token in localStorage for persistence across page refreshes.
+ * Authentication state is restored on app initialization using stored token
+ * or HttpOnly cookies via the refresh token API.
  */
 export const useAuthStore = create<AuthStore>()((set, get) => ({
+  // Initialize with stored token if available
   ...initialState,
+  accessToken: typeof window !== 'undefined' ? localStorage.getItem('fhsfbe625') : null,
 
   // Set authenticated user
   setUser: (user) => {
@@ -65,6 +68,14 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
 
   // Set access token
   setAccessToken: (accessToken) => {
+    // Store in localStorage for persistence across page refreshes
+    if (typeof window !== 'undefined') {
+      if (accessToken) {
+        localStorage.setItem('fhsfbe625', accessToken);
+      } else {
+        localStorage.removeItem('fhsfbe625');
+      }
+    }
     set({ accessToken });
   },
 
@@ -90,6 +101,10 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
 
   // Logout user
   logout: () => {
+    // Clear localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('fhsfbe625');
+    }
     set({
       user: null,
       accessToken: null,
@@ -101,6 +116,10 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
 
   // Update authentication state (login success)
   updateAuthState: ({ user, accessToken }) => {
+    // Store access token in localStorage for persistence
+    if (typeof window !== 'undefined' && accessToken) {
+      localStorage.setItem('fhsfbe625', accessToken);
+    }
     set({
       user,
       accessToken,
@@ -112,6 +131,10 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
 
   // Clear all authentication state
   clearAuthState: () => {
+    // Clear localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('fhsfbe625');
+    }
     set(initialState);
   },
 

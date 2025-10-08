@@ -80,14 +80,22 @@ async function adminApiRequest<T>(url: string, options: RequestInit = {}, access
     // Convert full URL to endpoint path for HttpClient
     const endpoint = url.replace(API_BASE_URL, '');
     
-    // Use HttpClient with authenticated request (handles token refresh automatically)
-    return await HttpClient.request<T>(endpoint, {
+    // Use HttpClient with authenticated request (handles token refresh automatically on 401)
+    const result = await HttpClient.request<T>(endpoint, {
       ...options,
       headers: {
-        'Authorization': `Bearer ${validToken}`,
         ...options.headers,
       },
-    });
+    }, validToken);
+    
+    // Check if a new token was returned and update the store
+    if (result && typeof result === 'object' && '_newAccessToken' in result) {
+      const { _newAccessToken, ...actualResult } = result as any;
+      // The new token is automatically handled by the HttpClient
+      return actualResult as T;
+    }
+    
+    return result;
   } catch (error) {
     if (error instanceof AdminApiError) {
       throw error;

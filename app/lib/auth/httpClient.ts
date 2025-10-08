@@ -18,15 +18,17 @@ export class HttpClient {
   private static baseURL = API_BASE_URL;
 
   /**
-   * Make an authenticated HTTP request using HttpOnly cookies
+   * Make an authenticated HTTP request with automatic token refresh on 401
    * 
    * @param endpoint - API endpoint (without base URL)
    * @param options - Fetch options
+   * @param accessToken - Optional access token for Authorization header
    * @returns Promise with parsed JSON response
    */
   static async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    accessToken?: string
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     
@@ -43,31 +45,117 @@ export class HttpClient {
       console.log('🌐 HTTP: Current domain:', typeof window !== 'undefined' ? window.location.origin : 'server-side');
       console.log('🌐 HTTP: Current cookies:', typeof document !== 'undefined' ? document.cookie : 'server-side');
       
+      // Prepare headers with optional Authorization
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(options.headers as Record<string, string>),
+      };
+
       // Check if this is a refresh token request and log additional details
       if (endpoint.includes('/auth/refresh')) {
         console.log('🔄 REFRESH: This is a refresh token request');
-        console.log('🔄 REFRESH: Document cookies:', typeof document !== 'undefined' ? document.cookie : 'server-side');
-        console.log('🔄 REFRESH: All cookies parsed:', typeof document !== 'undefined' ? 
-          document.cookie.split(';').map(c => c.trim()).filter(c => c.length > 0) : 'server-side');
-        
-        // Check for refresh token specifically
-        const hasRefreshToken = typeof document !== 'undefined' && 
-          (document.cookie.includes('refreshToken') || 
-           document.cookie.includes('refresh_token'));
-        console.log('🔄 REFRESH: Has refresh token cookie:', hasRefreshToken);
+        console.log('🔄 REFRESH: Request URL:', url);
+        console.log('🔄 REFRESH: Current domain:', typeof window !== 'undefined' ? window.location.origin : 'server-side');
+        console.log('🔄 REFRESH: Using cross-domain cookies (sameSite: none)');
+        console.log('🔄 REFRESH: Request will include credentials:', true);
+        console.log('🔄 REFRESH: CORS mode:', 'cors');
+        console.log('🔄 REFRESH: Headers being sent:', headers);
+      }
+      
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
       }
 
       const response = await fetch(url, {
         ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
+        headers,
         credentials: 'include', // Always include HttpOnly cookies
+        mode: 'cors', // Explicitly set CORS mode for cross-domain requests
       });
 
       console.log('🌐 HTTP: Response status:', response.status);
-      console.log('🌐 HTTP: Response headers:', Object.fromEntries(response.headers.entries()));
+
+      // Handle 401 Unauthorized - attempt token refresh and retry
+      if (response.status === 401 && accessToken) {
+        console.log('🔄 HTTP: Received 401, attempting token refresh...');
+        console.log('🔄 HTTP: Access token expired, using refresh token to get new one');
+        
+        try {
+          // Import AuthService dynamically to avoid circular dependency
+          const { AuthService } = await import('./api');
+          const refreshResponse = await AuthService.refreshToken();
+          
+          console.log('✅ HTTP: Token refreshed successfully, retrying original request...');
+          console.log('🔑 HTTP: New access token received, retrying with fresh token');
+          
+          // Retry the original request with new token
+          const retryResponse = await fetch(url, {
+            ...options,
+            headers: {
+              ...headers,
+              'Authorization': `Bearer ${refreshResponse.accessToken}`,
+            },
+            credentials: 'include',
+            mode: 'cors',
+          });
+          
+          if (!retryResponse.ok) {
+            const errorData = await retryResponse.json().catch(() => ({}));
+            console.error('❌ HTTP: Retry request failed even with fresh token:', {
+              status: retryResponse.status,
+              statusText: retryResponse.statusText,
+              error: errorData
+            });
+            throw new AuthApiError(
+              errorData?.message || `Request failed with status ${retryResponse.status}`,
+              retryResponse.status,
+              'REQUEST_FAILED'
+            );
+          }
+          
+          const retryData = await retryResponse.json().catch(() => retryResponse.text());
+          console.log('✅ HTTP: Request successful after token refresh');
+          console.log('🔄 HTTP: Token refresh and retry completed successfully');
+          
+          // Return both the data and the new token for the caller to update their state
+          return {
+            ...retryData,
+            _newAccessToken: refreshResponse.accessToken
+          } as T;
+          
+        } catch (refreshError) {
+          console.log('❌ HTTP: Token refresh failed:', refreshError);
+          
+          // Handle specific refresh token errors based on API documentation
+          if (refreshError instanceof AuthApiError) {
+            if (refreshError.code === 'REFRESH_TOKEN_MISSING') {
+              console.log('🍪 HTTP: Refresh token not provided (403)');
+              console.log('💡 HTTP: This usually means sameSite="strict" blocks cross-domain cookies');
+              throw new AuthApiError(
+                'No refresh token available, please log in again',
+                403,
+                'REFRESH_TOKEN_MISSING'
+              );
+            } else if (refreshError.code === 'REFRESH_TOKEN_EXPIRED') {
+              console.log('🍪 HTTP: Invalid refresh token (401)');
+              console.log('💡 HTTP: Refresh token is expired or invalid');
+              throw new AuthApiError(
+                'Refresh token expired, please log in again',
+                401,
+                'REFRESH_TOKEN_EXPIRED'
+              );
+            }
+          }
+          
+          // For any other refresh errors, treat as session expired
+          console.log('❌ HTTP: Session expired, user needs to login again');
+          throw new AuthApiError(
+            'Session expired, please log in again',
+            401,
+            'TOKEN_REFRESH_FAILED'
+          );
+        }
+      }
 
       let data: any;
       try {
@@ -98,6 +186,20 @@ export class HttpClient {
           responseHeaders: Object.fromEntries(response.headers.entries()),
           responseData: data
         });
+
+        // Additional debugging for refresh token requests
+        if (endpoint.includes('/auth/refresh')) {
+          console.error('🍪 REFRESH ERROR: Detailed analysis:');
+          console.error('🍪 REFRESH ERROR: Status:', response.status);
+          console.error('🍪 REFRESH ERROR: Error message:', errorMessage);
+          console.error('🍪 REFRESH ERROR: This usually means:');
+          console.error('🍪 REFRESH ERROR: 1. Backend sameSite is "strict" (blocks cross-domain)');
+          console.error('🍪 REFRESH ERROR: 2. HttpOnly cookie expired or not set');
+          console.error('🍪 REFRESH ERROR: 3. CORS not allowing credentials');
+          console.error('🍪 REFRESH ERROR: 4. Backend not receiving the cookie');
+          console.error('🍪 REFRESH ERROR: 🔧 SOLUTION: Backend must set cookie with sameSite: "none"');
+          console.error('🍪 REFRESH ERROR: 🔧 SOLUTION: Backend CORS must allow credentials from localhost:3000');
+        }
         
         // Log additional debugging info
         console.error('❌ HTTP: Additional debugging info:', {
@@ -150,8 +252,8 @@ export class HttpClient {
   /**
    * GET request
    */
-  static async get<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    return this.request<T>(endpoint, { ...options, method: 'GET' });
+  static async get<T>(endpoint: string, options: RequestInit = {}, accessToken?: string): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'GET' }, accessToken);
   }
 
   /**
@@ -160,13 +262,14 @@ export class HttpClient {
   static async post<T>(
     endpoint: string, 
     data?: any, 
-    options: RequestInit = {}
+    options: RequestInit = {},
+    accessToken?: string
   ): Promise<T> {
     return this.request<T>(endpoint, {
       ...options,
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
-    });
+    }, accessToken);
   }
 
   /**
@@ -175,20 +278,21 @@ export class HttpClient {
   static async put<T>(
     endpoint: string, 
     data?: any, 
-    options: RequestInit = {}
+    options: RequestInit = {},
+    accessToken?: string
   ): Promise<T> {
     return this.request<T>(endpoint, {
       ...options,
       method: 'PUT',
       body: data ? JSON.stringify(data) : undefined,
-    });
+    }, accessToken);
   }
 
   /**
    * DELETE request
    */
-  static async delete<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    return this.request<T>(endpoint, { ...options, method: 'DELETE' });
+  static async delete<T>(endpoint: string, options: RequestInit = {}, accessToken?: string): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'DELETE' }, accessToken);
   }
 
   /**
@@ -326,23 +430,34 @@ export class HttpClient {
 
 /**
  * Convenience functions for common API calls
+ * 
+ * These functions provide easy access to common API endpoints.
+ * For authentication endpoints, use AuthService methods instead for better error handling.
  */
 export const api = {
-  // Auth endpoints
+  // Auth endpoints (use AuthService methods for better error handling)
   auth: {
     login: (credentials: any) => HttpClient.post('/auth/login', credentials),
-    register: (userData: any) => HttpClient.post('/auth/register', userData),
-    logout: () => HttpClient.post('/auth/logout'),
-    refresh: () => HttpClient.post('/auth/refresh'),
-    profile: () => HttpClient.get('/auth/profile'),
+    register: (userData: any, adminToken?: string) => 
+      HttpClient.post('/auth/register', userData, {
+        headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {}
+      }),
+    logout: (accessToken: string) => HttpClient.post('/auth/logout', {}, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    }),
+    refresh: () => HttpClient.post('/auth/refresh'), // No body, uses HttpOnly cookie
+    profile: (accessToken: string) => HttpClient.get('/auth/profile', {}, accessToken),
   },
 
   // Admin endpoints
   admin: {
-    users: () => HttpClient.get('/admin/users'),
-    createUser: (userData: any) => HttpClient.post('/admin/users', userData),
-    updateUser: (id: number, userData: any) => HttpClient.put(`/admin/users/${id}`, userData),
-    deleteUser: (id: number) => HttpClient.delete(`/admin/users/${id}`),
+    users: (accessToken: string) => HttpClient.get('/admin/users', {}, accessToken),
+    createUser: (userData: any, accessToken: string) => 
+      HttpClient.post('/admin/users', userData, {}, accessToken),
+    updateUser: (id: number, userData: any, accessToken: string) => 
+      HttpClient.put(`/admin/users/${id}`, userData, {}, accessToken),
+    deleteUser: (id: number, accessToken: string) => 
+      HttpClient.delete(`/admin/users/${id}`, {}, accessToken),
   },
 
   // Other endpoints can be added here
