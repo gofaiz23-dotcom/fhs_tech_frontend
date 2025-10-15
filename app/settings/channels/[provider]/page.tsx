@@ -28,8 +28,9 @@ const channelRegions: Record<string, ChannelOption[]> = {
   ],
 }
 
-export default function ProviderPage({ params }: { params: { provider: string } }) {
-  const key = params.provider.toLowerCase()
+export default async function ProviderPage({ params }: { params: Promise<{ provider: string }> }) {
+  const { provider } = await params
+  const key = provider.toLowerCase()
   const pretty = key.charAt(0).toUpperCase() + key.slice(1)
   const regions = channelRegions[key] || [{ label: `${pretty} (Global)`, value: 'global' }]
   const showFba = key === 'amazon'
