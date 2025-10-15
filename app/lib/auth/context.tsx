@@ -421,17 +421,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const testCookieConfiguration = async (): Promise<void> => {
     console.log('🧪 Testing cookie configuration...');
     try {
-      const result = await HttpClient.testCookieConfiguration();
+      const result = await HttpClient.testConnectivity();
       console.log('🍪 Cookie Test Results:', result);
       
-      if (!result.cookiesAvailable) {
-        console.warn('⚠️ No cookies available - this might be why refresh token is not working');
-      }
-      
-      if (result.corsTest.error) {
-        console.error('❌ CORS Test Failed:', result.corsTest.error);
-        console.log('💡 This suggests a CORS configuration issue on the backend');
-        console.log('💡 Backend needs to allow credentials from your frontend domain');
+      if (!result.isReachable) {
+        console.warn('⚠️ API is not reachable - check your connection and CORS configuration');
+        if (result.error) {
+          console.error('❌ Connection Error:', result.error);
+        }
+      } else {
+        console.log('✅ API is reachable (status:', result.status, ')');
       }
     } catch (error) {
       console.error('❌ Cookie configuration test failed:', error);
