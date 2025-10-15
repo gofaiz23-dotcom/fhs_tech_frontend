@@ -18,15 +18,15 @@ export default function UsersSettingsPage() {
   return (
     <SettingsLayout>
       <div className="space-y-6">
-        <h2 className="text-xl font-semibold text-gray-800">Users</h2>
-        <div className="bg-white border rounded p-6">
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Users</h2>
+        <div className="bg-white dark:bg-slate-700 border dark:border-slate-600 rounded p-6">
           {users.length === 0 ? (
-            <div className="text-sm text-gray-700">No users yet. Save from Account Info.</div>
+            <div className="text-sm text-gray-700 dark:text-gray-300">No users yet. Save from Account Info.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="text-left text-gray-600 border-b">
+                  <tr className="text-left text-gray-600 dark:text-gray-300 border-b dark:border-slate-600">
                     <th className="py-2 pr-4">Name</th>
                     <th className="py-2 pr-4">Email</th>
                     <th className="py-2 pr-4">Telephone</th>
@@ -35,11 +35,11 @@ export default function UsersSettingsPage() {
                 </thead>
                 <tbody>
                   {users.map((u) => (
-                    <tr key={u.id} className="border-b last:border-b-0">
-                      <td className="py-2 pr-4">{u.firstName} {u.lastName}</td>
-                      <td className="py-2 pr-4">{u.email}</td>
-                      <td className="py-2 pr-4">{u.telephone}</td>
-                      <td className="py-2 pr-4">{u.companyName}</td>
+                    <tr key={u.id} className="border-b dark:border-slate-600 last:border-b-0">
+                      <td className="py-2 pr-4 text-gray-900 dark:text-white">{u.firstName} {u.lastName}</td>
+                      <td className="py-2 pr-4 text-gray-900 dark:text-white">{u.email}</td>
+                      <td className="py-2 pr-4 text-gray-900 dark:text-white">{u.telephone}</td>
+                      <td className="py-2 pr-4 text-gray-900 dark:text-white">{u.companyName}</td>
                     </tr>
                   ))}
                 </tbody>

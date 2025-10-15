@@ -22,6 +22,7 @@ import { AuthService, ensureValidToken } from '../auth/api';
 import { HttpClient } from '../auth/httpClient';
 
 // Base API configuration
+// const API_BASE_URL = 'https://fhs-tech-backend.onrender.com/api';
 const API_BASE_URL = 'https://fhs-tech-backend.onrender.com/api';
 const ADMIN_ENDPOINTS = {
   USERS_BASIC: `${API_BASE_URL}/admin/users/basic`,

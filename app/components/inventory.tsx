@@ -135,55 +135,55 @@ export default function Inventory() {
     <div className="w-full">
       <div className="flex flex-col md:flex-row gap-4">
         {/* Sidebar */}
-        <aside className="w-full md:w-64 border md:border-0 md:border-r bg-white p-4 rounded md:rounded-none">
-          <h3 className="font-semibold text-gray-800 mb-3">Filter Inventory</h3>
-          <div className="text-xs text-gray-600 mb-2">{filtered.length} inventory SKUs found</div>
+        <aside className="w-full md:w-64 border md:border-0 md:border-r bg-white dark:bg-slate-800 p-4 rounded md:rounded-none">
+          <h3 className="font-semibold text-gray-800 dark:text-slate-100 mb-3">Filter Inventory</h3>
+          <div className="text-xs text-gray-600 dark:text-slate-400 mb-2">{filtered.length} inventory SKUs found</div>
           <div className="mb-4 relative">
-            <input value={search} onChange={(e)=>{setSearch(e.target.value); setPage(1)}} placeholder="Search inventory" className="w-full border rounded pl-3 pr-8 py-2 text-sm" />
-            <span className="absolute right-2 top-2.5 text-gray-400"><Search/></span>
+            <input value={search} onChange={(e)=>{setSearch(e.target.value); setPage(1)}} placeholder="Search inventory" className="w-full border rounded pl-3 pr-8 py-2 text-sm bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100" />
+            <span className="absolute right-2 top-2.5 text-gray-400 dark:text-slate-400"><Search/></span>
           </div>
-          <div className="mb-2 text-sm text-gray-700">Tags</div>
-          <input value={tagQuery} onChange={(e)=>{setTagQuery(e.target.value); setPage(1)}} placeholder="Search Tags" className="w-full border rounded px-3 py-2 text-sm mb-4" />
+          <div className="mb-2 text-sm text-gray-700 dark:text-slate-300">Tags</div>
+          <input value={tagQuery} onChange={(e)=>{setTagQuery(e.target.value); setPage(1)}} placeholder="Search Tags" className="w-full border rounded px-3 py-2 text-sm mb-4 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100" />
 
-          <div className="mb-2 text-sm text-gray-700">Conditions</div>
-          <select value={condition} onChange={(e)=>{setCondition(e.target.value as any); setPage(1)}} className="w-full border rounded px-3 py-2 text-sm mb-4">
+          <div className="mb-2 text-sm text-gray-700 dark:text-slate-300">Conditions</div>
+          <select value={condition} onChange={(e)=>{setCondition(e.target.value as any); setPage(1)}} className="w-full border rounded px-3 py-2 text-sm mb-4 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100">
             <option value="all">All Conditions</option>
             <option value="new">new</option>
             <option value="used">used</option>
           </select>
 
-          <div className="mb-2 text-sm text-gray-700">Category</div>
-          <select value={category} onChange={(e)=>{setCategory(e.target.value); setPage(1)}} className="w-full border rounded px-3 py-2 text-sm mb-4">
+          <div className="mb-2 text-sm text-gray-700 dark:text-slate-300">Category</div>
+          <select value={category} onChange={(e)=>{setCategory(e.target.value); setPage(1)}} className="w-full border rounded px-3 py-2 text-sm mb-4 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100">
             {categories.map(c => (<option key={c} value={c}>{c}</option>))}
           </select>
 
-          <div className="mb-2 text-sm text-gray-700">Inventory</div>
+          <div className="mb-2 text-sm text-gray-700 dark:text-slate-300">Inventory</div>
           <div className="space-y-2 mb-4">
-            <label className="flex items-center gap-2 text-sm text-gray-700"><input type="radio" name="inv" checked={invFilter==='available'} onChange={()=>{setInvFilter('available'); setPage(1)}}/> Available</label>
-            <label className="flex items-center gap-2 text-sm text-gray-700"><input type="radio" name="inv" checked={invFilter==='reserved'} onChange={()=>{setInvFilter('reserved'); setPage(1)}}/> Reserved</label>
-            <label className="flex items-center gap-2 text-sm text-gray-700"><input type="radio" name="inv" checked={invFilter==='on_hand'} onChange={()=>{setInvFilter('on_hand'); setPage(1)}}/> On Hand</label>
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300"><input type="radio" name="inv" checked={invFilter==='available'} onChange={()=>{setInvFilter('available'); setPage(1)}}/> Available</label>
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300"><input type="radio" name="inv" checked={invFilter==='reserved'} onChange={()=>{setInvFilter('reserved'); setPage(1)}}/> Reserved</label>
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300"><input type="radio" name="inv" checked={invFilter==='on_hand'} onChange={()=>{setInvFilter('on_hand'); setPage(1)}}/> On Hand</label>
           </div>
 
           <div className="grid grid-cols-2 gap-2 mb-4">
             <div>
-              <div className="text-xs text-gray-600 mb-1">From</div>
-              <input value={qtyMin} onChange={(e)=>{setQtyMin(e.target.value); setPage(1)}} className="w-full border rounded px-2 py-2 text-sm" />
+              <div className="text-xs text-gray-600 dark:text-slate-400 mb-1">From</div>
+              <input value={qtyMin} onChange={(e)=>{setQtyMin(e.target.value); setPage(1)}} className="w-full border rounded px-2 py-2 text-sm bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100" />
             </div>
             <div>
-              <div className="text-xs text-gray-600 mb-1">To</div>
-              <input value={qtyMax} onChange={(e)=>{setQtyMax(e.target.value); setPage(1)}} className="w-full border rounded px-2 py-2 text-sm" />
+              <div className="text-xs text-gray-600 dark:text-slate-400 mb-1">To</div>
+              <input value={qtyMax} onChange={(e)=>{setQtyMax(e.target.value); setPage(1)}} className="w-full border rounded px-2 py-2 text-sm bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100" />
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button className="btn-secondary text-sm px-3 py-2" onClick={()=>{ /* filters auto-apply */ }}>Apply filter</button>
-            <button className="text-blue-600 text-sm" onClick={()=>{setSearch(''); setTagQuery(''); setCondition('all'); setCategory('All Categories'); setInvFilter('available'); setQtyMin(''); setQtyMax(''); setPage(1)}}>Clear filter</button>
+            <button className="text-blue-600 dark:text-blue-400 text-sm" onClick={()=>{setSearch(''); setTagQuery(''); setCondition('all'); setCategory('All Categories'); setInvFilter('available'); setQtyMin(''); setQtyMax(''); setPage(1)}}>Clear filter</button>
           </div>
         </aside>
 
         {/* Main */}
         <main className="flex-1 space-y-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-semibold text-gray-800">Inventory</h1>
+            <h1 className="text-xl font-semibold text-gray-800 dark:text-slate-100">Inventory</h1>
             <div className="flex items-center gap-2">
               <button className="btn-secondary text-sm px-3 py-2">Import from CSV</button>
               <button className="btn-secondary text-sm px-3 py-2">Manage locations</button>
@@ -197,9 +197,9 @@ export default function Inventory() {
             <button className="btn-secondary text-sm px-3 py-2">Bulk editor</button>
           </div>
 
-          <div className="overflow-x-auto bg-white border rounded">
+          <div className="overflow-x-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-gray-600">
+              <thead className="bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-slate-300">
                 <tr>
                   <th className="w-10 p-3 text-left"><input type="checkbox" checked={allSelected} onChange={(e)=>toggleAll(e.target.checked)} /></th>
                   <th className="p-3 text-left">Name</th>
@@ -216,43 +216,43 @@ export default function Inventory() {
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td className="p-4 text-center text-gray-500" colSpan={11}>Loading...</td></tr>
+                  <tr><td className="p-4 text-center text-gray-500 dark:text-slate-400" colSpan={11}>Loading...</td></tr>
                 )}
                 {pageItems.map((i) => (
-                  <tr key={i.id} className="border-t hover:bg-gray-50">
+                  <tr key={i.id} className="border-t border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700">
                     <td className="w-10 p-3 align-top"><input type="checkbox" checked={selectedIds.has(i.id)} onChange={(e)=>toggleOne(i.id, e.target.checked)} /></td>
                     <td className="p-3">
                       <div className="flex items-center gap-3">
-                        <img src={i.thumbnail} alt="thumb" className="w-10 h-10 rounded object-contain bg-gray-100" />
+                        <img src={i.thumbnail} alt="thumb" className="w-10 h-10 rounded object-contain bg-gray-100 dark:bg-slate-600" />
                         <div>
-                          <div className="text-gray-900 font-medium">{i.name}</div>
-                          <div className="text-xs text-gray-500">Size: Large | Color: Heather White</div>
+                          <div className="text-gray-900 dark:text-slate-100 font-medium">{i.name}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400">Size: Large | Color: Heather White</div>
                         </div>
                       </div>
                     </td>
-                    <td className="p-3 text-gray-700">{i.sku}</td>
-                    <td className="p-3 text-gray-700">{i.condition}</td>
-                    <td className="p-3 text-gray-700">{i.location}</td>
-                    <td className="p-3 text-gray-700">{i.binLocation}</td>
-                    <td className="p-3 text-gray-700">{i.available}</td>
-                    <td className="p-3 text-gray-700">{i.reserved}</td>
-                    <td className="p-3 text-gray-700">{i.onHand}</td>
-                    <td className="p-3 text-gray-700">{i.price}</td>
-                    <td className="p-3 text-gray-700">{i.lastModified}</td>
+                    <td className="p-3 text-gray-700 dark:text-slate-300">{i.sku}</td>
+                    <td className="p-3 text-gray-700 dark:text-slate-300">{i.condition}</td>
+                    <td className="p-3 text-gray-700 dark:text-slate-300">{i.location}</td>
+                    <td className="p-3 text-gray-700 dark:text-slate-300">{i.binLocation}</td>
+                    <td className="p-3 text-gray-700 dark:text-slate-300">{i.available}</td>
+                    <td className="p-3 text-gray-700 dark:text-slate-300">{i.reserved}</td>
+                    <td className="p-3 text-gray-700 dark:text-slate-300">{i.onHand}</td>
+                    <td className="p-3 text-gray-700 dark:text-slate-300">{i.price}</td>
+                    <td className="p-3 text-gray-700 dark:text-slate-300">{i.lastModified}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="flex items-center justify-between p-3 text-xs text-gray-600 border-t">
+            <div className="flex items-center justify-between p-3 text-xs text-gray-600 dark:text-slate-400 border-t border-gray-200 dark:border-slate-600">
               <div>Showing {(safePage-1)*perPage + (pageItems.length > 0 ? 1 : 0)} - {(safePage-1)*perPage + pageItems.length} of {filtered.length} Inventory SKUs</div>
               <div className="flex items-center gap-2">
-                <button className="px-2 py-1 border rounded" onClick={()=>setPage(1)} disabled={safePage===1}>First</button>
-                <button className="px-2 py-1 border rounded" onClick={()=>setPage(Math.max(1, safePage-1))} disabled={safePage===1}>Previous</button>
-                <span className="px-2 py-1 border rounded bg-gray-100">{safePage}</span>
-                <button className="px-2 py-1 border rounded" onClick={()=>setPage(Math.min(totalPages, safePage+1))} disabled={safePage===totalPages}>Next</button>
-                <button className="px-2 py-1 border rounded" onClick={()=>setPage(totalPages)} disabled={safePage===totalPages}>Last</button>
+                <button className="px-2 py-1 border rounded bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100" onClick={()=>setPage(1)} disabled={safePage===1}>First</button>
+                <button className="px-2 py-1 border rounded bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100" onClick={()=>setPage(Math.max(1, safePage-1))} disabled={safePage===1}>Previous</button>
+                <span className="px-2 py-1 border rounded bg-gray-100 dark:bg-slate-600 text-gray-900 dark:text-slate-100">{safePage}</span>
+                <button className="px-2 py-1 border rounded bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100" onClick={()=>setPage(Math.min(totalPages, safePage+1))} disabled={safePage===totalPages}>Next</button>
+                <button className="px-2 py-1 border rounded bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100" onClick={()=>setPage(totalPages)} disabled={safePage===totalPages}>Last</button>
                 <div className="ml-4 flex items-center gap-2">View
-                  <select className="border rounded px-2 py-1" value={perPage} onChange={(e)=>{setPerPage(Number(e.target.value)); setPage(1)}}>
+                  <select className="border rounded px-2 py-1 bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-900 dark:text-slate-100" value={perPage} onChange={(e)=>{setPerPage(Number(e.target.value)); setPage(1)}}>
                     <option value={25}>25</option>
                     <option value={50}>50</option>
                     <option value={100}>100</option>

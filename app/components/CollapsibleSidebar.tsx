@@ -252,7 +252,7 @@ export default function CollapsibleSidebar({
       </div>
     }>
       <div
-        className={`fixed top-0 left-0 h-full ${resolvedTheme === 'dark' ? 'bg-slate-800 border-r border-slate-700' : 'bg-white'} shadow-lg z-40 transform transition-all duration-300 ease-in-out ${
+        className={`fixed top-0 left-0 h-full ${resolvedTheme === 'dark' ? 'bg-slate-900 border-r border-slate-700' : 'bg-white'} shadow-lg z-40 transform transition-all duration-300 ease-in-out ${
           isCollapsed ? "w-16" : "w-64"
         } hidden md:block`}
       >
@@ -379,7 +379,7 @@ export default function CollapsibleSidebar({
 
       {/* Mobile Sidebar */}
       <div
-        className={`fixed top-0 left-0 h-full ${resolvedTheme === 'dark' ? 'bg-slate-800 border-r border-slate-700' : 'bg-white'} shadow-lg z-50 transform transition-all duration-300 ease-in-out w-64 md:hidden ${
+        className={`fixed top-0 left-0 h-full ${resolvedTheme === 'dark' ? 'bg-slate-900 border-r border-slate-700' : 'bg-white'} shadow-lg z-50 transform transition-all duration-300 ease-in-out w-64 md:hidden ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

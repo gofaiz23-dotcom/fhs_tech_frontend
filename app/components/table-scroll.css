@@ -1,0 +1,99 @@
+/* Custom scrollbar styles for table */
+.table-scroll-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+  width: 100%;
+  max-height: calc(100vh - 350px);
+  overflow-x: auto;
+  overflow-y: auto;
+  cursor: grab;
+  position: relative;
+  border-radius: 0.5rem;
+}
+
+.table-scroll-container:active {
+  cursor: grabbing;
+}
+
+.table-scroll-container::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.table-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.8);
+}
+
+/* Dark mode scrollbar */
+.dark .table-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
+}
+
+.dark .table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.8);
+}
+
+/* Table styles */
+.table-scroll-container table {
+  min-width: 100%;
+  table-layout: auto;
+  width: max-content;
+}
+
+.table-scroll-container th,
+.table-scroll-container td {
+  white-space: nowrap;
+  padding: 12px 16px;
+}
+
+/* Fixed table header */
+.table-scroll-container thead th {
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 20;
+  border-bottom: 2px solid #e5e7eb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(8px);
+  font-weight: 600;
+}
+
+.table-scroll-container thead th::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(to right, #3b82f6, #8b5cf6);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.table-scroll-container.scrolled thead th::after {
+  opacity: 1;
+}
+
+.dark .table-scroll-container thead th {
+  background: #1e293b;
+  border-bottom: 2px solid #475569;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Scroll lock for modal */
+body.modal-open {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+}

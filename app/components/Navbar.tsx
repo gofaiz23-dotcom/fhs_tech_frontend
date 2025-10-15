@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, Menu, X } from "lucide-react";
+import { LogOut, Menu, X, UserX } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import React, { useState } from "react";
@@ -19,6 +19,16 @@ export default function Navbar() {
       await logout();
     } catch (error) {
       console.error('Logout failed:', error);
+    }
+  };
+
+  const handleSignout = async () => {
+    try {
+      // For now, signout will do the same as logout
+      // In the future, this could be different (e.g., sign out from all devices)
+      await logout();
+    } catch (error) {
+      console.error('Signout failed:', error);
     }
   };
 
@@ -69,15 +79,18 @@ export default function Navbar() {
 
           {/* Right Section */}
           <div className="flex items-center gap-3">
-            {/* <ThemeToggle /> */}
+            <ThemeToggle />
             {state.isAuthenticated && state.user ? (
-              <button
-                onClick={handleLogout}
-                className="btn-warning text-sm flex items-center gap-2"
-              >
-                <span className="hidden sm:inline">Sign out</span>
-                <LogOut size={16} />
-              </button>
+              <>
+                <button
+                  onClick={handleLogout}
+                  className="btn-warning text-sm flex items-center gap-2"
+                >
+                  <span className="hidden sm:inline">Log out</span>
+                  <LogOut size={16} />
+                </button>
+               
+              </>
             ) : (
               <Link href="/login" className="btn-primary text-sm">
                 Sign In

@@ -25,6 +25,7 @@ import {
 import { HttpClient } from './httpClient';
 
 // Base API configuration
+// const API_BASE_URL = 'https://fhs-tech-backend.onrender.com/api';
 const API_BASE_URL = 'https://fhs-tech-backend.onrender.com/api';
 const AUTH_ENDPOINTS = {
   LOGIN: `${API_BASE_URL}/auth/login`,

@@ -579,9 +579,9 @@ export default function AccessControlPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-        <h2 className="text-xl font-semibold text-gray-800 dark:text-slate-100 dark:text-slate-100">Access Control</h2>
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-slate-100">Access Control</h2>
             {!isLoading && (
-              <p className="text-sm text-gray-600 dark:text-slate-400 dark:text-slate-400 mt-1">
+              <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
                 {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} total
                 {searchTerm && ` (filtered from ${users.length})`}
               </p>
@@ -671,8 +671,8 @@ export default function AccessControlPage() {
                             <span className={`h-8 w-8 rounded-full ${getAvatarClass(user.id)}`}></span>
                           </div>
                           <div>
-                            <div className="font-medium text-gray-800 dark:text-slate-100 dark:text-slate-100">{getDisplayUsername(user)}</div>
-                            <div className="text-xs text-gray-500 dark:text-slate-400 dark:text-slate-400 flex items-center gap-2">
+                            <div className="font-medium text-gray-800 dark:text-slate-100">{getDisplayUsername(user)}</div>
+                            <div className="text-xs text-gray-500 dark:text-slate-400 flex items-center gap-2">
                               {user.role}
                             </div>
                           </div>
@@ -729,7 +729,7 @@ export default function AccessControlPage() {
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
             <div className="card p-4 sm:p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-6">
-                <div className="text-lg font-semibold text-gray-800 dark:text-slate-100 dark:text-slate-100">View Access - {getDisplayUsername(showGrantAccess)}</div>
+                <div className="text-lg font-semibold text-gray-800 dark:text-slate-100">View Access - {getDisplayUsername(showGrantAccess)}</div>
                 <button className="text-gray-400 hover:text-red-500 transition-colors" onClick={() => setShowGrantAccess(null)}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -756,8 +756,8 @@ export default function AccessControlPage() {
                   <div className="flex items-center gap-3">
                     <div className="w-4 h-4 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full flex-shrink-0"></div>
                     <div>
-                      <h3 className="font-semibold text-gray-800 dark:text-slate-100 dark:text-slate-100">Bulk Actions</h3>
-                      <p className="text-sm text-gray-600 dark:text-slate-400 dark:text-slate-400">Quickly manage all permissions at once</p>
+                      <h3 className="font-semibold text-gray-800 dark:text-slate-100">Bulk Actions</h3>
+                      <p className="text-sm text-gray-600 dark:text-slate-400">Quickly manage all permissions at once</p>
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
@@ -791,14 +791,14 @@ export default function AccessControlPage() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-                    <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100 dark:text-slate-100">Brands</h3>
-                    <span className="text-sm text-gray-500 dark:text-slate-400 dark:text-slate-400">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100">Brands</h3>
+                    <span className="text-sm text-gray-500 dark:text-slate-400">
                       ({Object.values(brandAccess).filter(Boolean).length}/{brands?.length || 0})
                     </span>
                   </div>
                   <div className="space-y-3">
                     {brands?.map((brand) => (
-                      <div key={brand.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:shadow-sm transition-shadow">
+                      <div key={brand.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:shadow-sm transition-shadow">
                         <div className="flex-1">
                           <div className="font-medium text-gray-900 dark:text-slate-100">{brand.name}</div>
                           <div className="text-sm text-gray-500 dark:text-slate-400">{brand.description}</div>
@@ -824,7 +824,7 @@ export default function AccessControlPage() {
                   </div>
                   <div className="space-y-3">
                     {marketplaces?.map((marketplace) => (
-                      <div key={marketplace.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:shadow-sm transition-shadow">
+                      <div key={marketplace.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:shadow-sm transition-shadow">
                         <div className="flex-1">
                           <div className="font-medium text-gray-900 dark:text-slate-100">{marketplace.name}</div>
                           <div className="text-sm text-gray-500 dark:text-slate-400">{marketplace.description}</div>
@@ -850,7 +850,7 @@ export default function AccessControlPage() {
                   </div>
                   <div className="space-y-3">
                     {shippingPlatforms?.map((shipping) => (
-                      <div key={shipping.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:shadow-sm transition-shadow">
+                      <div key={shipping.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:shadow-sm transition-shadow">
                         <div className="flex-1">
                           <div className="font-medium text-gray-900 dark:text-slate-100">{shipping.name}</div>
                           <div className="text-sm text-gray-500 dark:text-slate-400">{shipping.description}</div>
