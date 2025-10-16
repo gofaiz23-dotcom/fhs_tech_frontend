@@ -19,8 +19,12 @@ interface UnifiedAddNewProps {
   onAddShipping?: () => void;
   onBulkAddShipping?: () => void;
   onImportShipping?: () => void;
+  // Product props
+  onAddProduct?: () => void;
+  onBulkAddProduct?: () => void;
+  onImportProduct?: () => void;
   // Platform type to determine which tabs to show
-  platformType?: 'marketplace' | 'brands' | 'shipping';
+  platformType?: 'marketplace' | 'brands' | 'shipping' | 'products';
   className?: string;
 }
 
@@ -34,6 +38,9 @@ const UnifiedAddNew: React.FC<UnifiedAddNewProps> = ({
   onAddShipping,
   onBulkAddShipping,
   onImportShipping,
+  onAddProduct,
+  onBulkAddProduct,
+  onImportProduct,
   platformType = 'marketplace',
   className = ""
 }) => {
@@ -51,13 +58,13 @@ const UnifiedAddNew: React.FC<UnifiedAddNewProps> = ({
         <div className="space-y-4">
           <div>
             <h4 className="font-medium text-gray-900 dark:text-gray-100">Add New Item</h4>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            {/* <p className="text-sm text-gray-600 dark:text-gray-400">
               Choose the type of item you want to add
-            </p>
+            </p> */}
           </div>
           
           <Tabs defaultValue={platformType} className="w-full">
-            <TabsList className="grid w-full grid-cols-1">
+            {/* <TabsList className="grid w-full grid-cols-1">
               <TabsTrigger value={platformType} className="text-xs">
                 {platformType === 'marketplace' && (
                   <>
@@ -78,7 +85,7 @@ const UnifiedAddNew: React.FC<UnifiedAddNewProps> = ({
                   </>
                 )}
               </TabsTrigger>
-            </TabsList>
+            </TabsList> */}
             
             <TabsContent value={platformType} className="space-y-3 mt-4">
               <div className="space-y-2">
@@ -185,6 +192,44 @@ const UnifiedAddNew: React.FC<UnifiedAddNewProps> = ({
                     <Button
                       onClick={() => {
                         onImportShipping?.();
+                        setOpen(false);
+                      }}
+                      className="w-full justify-start"
+                      variant="outline"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import File
+                    </Button>
+                  </>
+                )}
+                
+                {platformType === 'products' && (
+                  <>
+                    <Button
+                      onClick={() => {
+                        onAddProduct?.();
+                        setOpen(false);
+                      }}
+                      className="w-full justify-start"
+                      variant="outline"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add New Product
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        onBulkAddProduct?.();
+                        setOpen(false);
+                      }}
+                      className="w-full justify-start"
+                      variant="outline"
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      Bulk Add
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        onImportProduct?.();
                         setOpen(false);
                       }}
                       className="w-full justify-start"

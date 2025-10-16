@@ -4,6 +4,23 @@ const nextConfig: NextConfig = {
   // Disable development indicators
   devIndicators: false,
   
+  // Image configuration for external domains
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'http',
+        hostname: '192.168.0.23',
+        port: '5000',
+        pathname: '/uploads/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
+    unoptimized: true, // For development - allows all image sources
+  },
+  
   // Optimize development experience
   experimental: {
     // Disable experimental features for stability

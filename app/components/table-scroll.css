@@ -9,6 +9,19 @@
   cursor: grab;
   position: relative;
   border-radius: 0.5rem;
+  /* Enable smooth scrolling and hardware acceleration */
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: auto; /* Let JS handle smooth scrolling */
+  /* Performance optimizations for medium smooth dragging */
+  will-change: scroll-position;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+  /* GPU acceleration */
+  transform: translate3d(0, 0, 0);
+  /* Smooth rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .table-scroll-container:active {
@@ -49,6 +62,8 @@
   min-width: 100%;
   table-layout: auto;
   width: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .table-scroll-container th,
@@ -57,16 +72,31 @@
   padding: 12px 16px;
 }
 
-/* Fixed table header */
-.table-scroll-container thead th {
+/* Fixed table header - Enhanced for better stickiness */
+.table-scroll-container {
+  position: relative;
+}
+
+.table-scroll-container thead {
   position: sticky;
   top: 0;
+  z-index: 100;
   background: white;
-  z-index: 20;
+}
+
+.table-scroll-container thead th {
+  position: sticky !important;
+  top: 0 !important;
+  background: white !important;
+  z-index: 100 !important;
   border-bottom: 2px solid #e5e7eb;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(8px);
   font-weight: 600;
+  /* Safari support */
+  position: -webkit-sticky !important;
+  /* Ensure proper stacking */
+  isolation: isolate;
 }
 
 .table-scroll-container thead th::after {
@@ -85,8 +115,12 @@
   opacity: 1;
 }
 
-.dark .table-scroll-container thead th {
+.dark .table-scroll-container thead {
   background: #1e293b;
+}
+
+.dark .table-scroll-container thead th {
+  background: #1e293b !important;
   border-bottom: 2px solid #475569;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
@@ -96,4 +130,85 @@ body.modal-open {
   overflow: hidden;
   position: fixed;
   width: 100%;
+}
+
+/* Resizable column styles */
+.table-scroll-container th {
+  user-select: none;
+  position: relative;
+}
+
+/* More visible resize handles */
+.table-scroll-container th > div > div[class*="cursor-col-resize"] {
+  opacity: 0.6 !important;
+  transition: all 0.2s ease;
+}
+
+.table-scroll-container th:hover > div > div[class*="cursor-col-resize"] {
+  opacity: 1 !important;
+  background: rgba(59, 130, 246, 0.6) !important;
+}
+
+.dark .table-scroll-container th:hover > div > div[class*="cursor-col-resize"] {
+  background: rgba(96, 165, 250, 0.7) !important;
+}
+
+.table-scroll-container th > div > div[class*="cursor-col-resize"]:active {
+  background: rgba(59, 130, 246, 0.9) !important;
+}
+
+.dark .table-scroll-container th > div > div[class*="cursor-col-resize"]:active {
+  background: rgba(96, 165, 250, 0.9) !important;
+}
+
+/* Prevent text selection during resize */
+body.resizing-column {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+body.resizing-column * {
+  cursor: col-resize !important;
+}
+
+/* Expandable cell styles */
+.expandable-cell-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.expandable-cell-content .expand-btn {
+  flex-shrink: 0;
+}
+
+/* Table cell overflow handling for dynamic resizing */
+.table-scroll-container td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
+}
+
+/* Enhanced sticky header behavior */
+.table-scroll-container {
+  /* Ensure the container creates a stacking context */
+  contain: layout style;
+}
+
+/* Make sure the table header stays above everything */
+.table-scroll-container thead th {
+  /* Force the header to stay on top */
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Add a subtle border when scrolled to show the header is floating */
+.table-scroll-container.scrolled thead th {
+  border-bottom: 3px solid #3b82f6;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.dark .table-scroll-container.scrolled thead th {
+  border-bottom: 3px solid #60a5fa;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
