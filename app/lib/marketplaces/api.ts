@@ -10,7 +10,7 @@
 import { ensureValidToken } from '../auth/api';
 
 // Base API configuration
-const API_BASE_URL = 'https://fhs-tech-backend.onrender.com/api';
+const API_BASE_URL = 'http://192.168.0.23:5000/api';
 
 /**
  * Marketplace interface

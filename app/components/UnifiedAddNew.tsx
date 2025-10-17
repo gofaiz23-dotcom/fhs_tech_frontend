@@ -23,8 +23,12 @@ interface UnifiedAddNewProps {
   onAddProduct?: () => void;
   onBulkAddProduct?: () => void;
   onImportProduct?: () => void;
+  // Listings props
+  onAddListing?: () => void;
+  onBulkAddListing?: () => void;
+  onImportListing?: () => void;
   // Platform type to determine which tabs to show
-  platformType?: 'marketplace' | 'brands' | 'shipping' | 'products';
+  platformType?: 'marketplace' | 'brands' | 'shipping' | 'products' | 'listings';
   className?: string;
 }
 
@@ -41,6 +45,9 @@ const UnifiedAddNew: React.FC<UnifiedAddNewProps> = ({
   onAddProduct,
   onBulkAddProduct,
   onImportProduct,
+  onAddListing,
+  onBulkAddListing,
+  onImportListing,
   platformType = 'marketplace',
   className = ""
 }) => {
@@ -230,6 +237,44 @@ const UnifiedAddNew: React.FC<UnifiedAddNewProps> = ({
                     <Button
                       onClick={() => {
                         onImportProduct?.();
+                        setOpen(false);
+                      }}
+                      className="w-full justify-start"
+                      variant="outline"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import File
+                    </Button>
+                  </>
+                )}
+                
+                {platformType === 'listings' && (
+                  <>
+                    <Button
+                      onClick={() => {
+                        onAddListing?.();
+                        setOpen(false);
+                      }}
+                      className="w-full justify-start"
+                      variant="outline"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add New Listing
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        onBulkAddListing?.();
+                        setOpen(false);
+                      }}
+                      className="w-full justify-start"
+                      variant="outline"
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      Bulk Add
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        onImportListing?.();
                         setOpen(false);
                       }}
                       className="w-full justify-start"

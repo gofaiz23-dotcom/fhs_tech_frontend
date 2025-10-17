@@ -38,11 +38,23 @@ export class HttpClient {
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
 
+      console.log('🌐 HTTP Request:', {
+        method: options.method || 'GET',
+        url,
+        hasToken: !!accessToken
+      });
+
       const response = await fetch(url, {
         ...options,
         headers,
         credentials: 'include',
         mode: 'cors',
+      });
+      
+      console.log('📥 HTTP Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
       });
 
       // Handle 401 Unauthorized - attempt token refresh and retry
@@ -99,7 +111,9 @@ export class HttpClient {
       let data: any;
       try {
         data = await response.json();
+        console.log('📦 Response data:', data);
       } catch (parseError) {
+        console.error('❌ Failed to parse JSON response:', parseError);
         data = {
           error: `Invalid JSON response from server (${response.status})`,
           code: 'INVALID_JSON'
@@ -111,6 +125,14 @@ export class HttpClient {
         const errorMessage = error?.error || error?.message || `HTTP error: ${response.statusText}` || 'Unknown error';
         const errorCode = error?.code?.toString() || response.status.toString();
         
+        console.error('❌ API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorMessage,
+          errorCode,
+          fullError: error
+        });
+        
         throw new AuthApiError(errorMessage, response.status, errorCode);
       }
 
@@ -120,8 +142,11 @@ export class HttpClient {
         throw error;
       }
       
+      console.error('❌ Network Error:', error);
+      console.error('Request details:', { url, method: options.method || 'GET' });
+      
       throw new AuthApiError(
-        'Network error or server unavailable',
+        `Network error or server unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`,
         0,
         'NETWORK_ERROR'
       );
@@ -180,26 +205,47 @@ export class HttpClient {
   static async testConnectivity(): Promise<{
     isReachable: boolean;
     status: number;
+    message?: string;
     error?: string;
   }> {
     try {
+      console.log('🔍 Testing API connectivity to:', `${this.baseURL}/health`);
+      
       const response = await fetch(`${this.baseURL}/health`, {
         method: 'GET',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
       });
       
+      const data = await response.json().catch(() => ({}));
+      
+      console.log('✅ API connectivity test result:', {
+        status: response.status,
+        ok: response.ok,
+        data
+      });
+      
       return {
         isReachable: true,
         status: response.status,
+        message: data?.message || 'API is reachable'
       };
     } catch (error) {
+      console.error('❌ API connectivity test failed:', error);
+      
       return {
         isReachable: false,
         status: 0,
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
+  }
+  
+  /**
+   * Get the current base URL
+   */
+  static getBaseURL(): string {
+    return this.baseURL;
   }
 }
 

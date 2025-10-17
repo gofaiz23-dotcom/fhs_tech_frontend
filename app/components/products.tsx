@@ -117,7 +117,7 @@ const Products = () => {
   })
   
   // Multiple Sub SKUs state
-  const [subSkus, setSubSkus] = useState<string[]>([''])
+  const [subSkus, setSubSkus] = useState<{ sku: string, quantity: string }[]>([{ sku: '', quantity: '0' }])
   
   // Product features state
   const [productFeatures, setProductFeatures] = useState<string[]>([''])
@@ -139,6 +139,11 @@ const Products = () => {
   const [galleryImages, setGalleryImages] = useState<string[]>([])
   const [currentGalleryIndex, setCurrentGalleryIndex] = useState(0)
   const [galleryTitle, setGalleryTitle] = useState('')
+  
+  // Fullscreen image modal
+  const [showFullscreenImage, setShowFullscreenImage] = useState(false)
+  const [fullscreenImageUrl, setFullscreenImageUrl] = useState('')
+  const [fullscreenImageTitle, setFullscreenImageTitle] = useState('')
   
   // Selected rows state
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set())
@@ -357,7 +362,14 @@ const Products = () => {
       setLoading(true)
       setError(null)
       
+      console.log('🔄 Loading products with filters:', filters)
+      console.log('🔑 Access token available:', !!state.accessToken)
+      
       const response = await ProductsService.getProducts(state.accessToken, filters)
+      
+      console.log('✅ Products loaded successfully:', response.products.length, 'items')
+      console.log('📄 Pagination:', response.pagination)
+      
       setProducts(response.products)
       setPagination(response.pagination)
       
@@ -374,7 +386,13 @@ const Products = () => {
         console.log('⚠️ No products with images found in this batch')
       }
     } catch (err: any) {
-      console.error('Failed to load products:', err)
+      console.error('❌ Failed to load products:', err)
+      console.error('Error details:', {
+        message: err.message,
+        code: err.code,
+        status: err.status,
+        stack: err.stack
+      })
       setError(err.message || 'Failed to load products')
     } finally {
       setLoading(false)
@@ -398,14 +416,34 @@ const Products = () => {
     }
   }
   
+  // Test API connectivity on mount
+  useEffect(() => {
+    const testConnection = async () => {
+      const { default: HttpClient } = await import('../lib/auth/httpClient');
+      const result = await HttpClient.testConnectivity();
+      console.log('🔌 API Connection Test:', result);
+      
+      if (!result.isReachable) {
+        console.error('⚠️ WARNING: API server is not reachable!');
+        setError(`API server is not reachable: ${result.error}`);
+      }
+    };
+    
+    testConnection();
+  }, []);
+  
   // Load data on mount and when filters change
   useEffect(() => {
-    loadProducts()
-  }, [filters.page, filters.limit, filters.search, filters.category, filters.brandId, filters.sortBy, filters.sortOrder])
+    if (state.accessToken) {
+      loadProducts()
+    }
+  }, [filters.page, filters.limit, filters.search, filters.category, filters.brandId, filters.sortBy, filters.sortOrder, state.accessToken])
   
   useEffect(() => {
-    loadFilterOptions()
-  }, [])
+    if (state.accessToken) {
+      loadFilterOptions()
+    }
+  }, [state.accessToken])
   
   // Cleanup modal scroll lock on unmount
   useEffect(() => {
@@ -859,7 +897,7 @@ const Products = () => {
       const finalPayload = payload.length === 1 ? payload[0] : { listings: payload }
       
       // Send to API
-      const response = await fetch('http://192.168.0.23:5000/api/listings', {
+      const response = await fetch('https://192.168.0.23:5000/api/listings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -900,7 +938,7 @@ const Products = () => {
   
   // Reset product form
   const resetProductForm = () => {
-    setSubSkus([''])
+    setSubSkus([{ sku: '', quantity: '0' }])
     setProductFeatures([''])
     setCustomTypes([])
     setProductFormData({
@@ -953,28 +991,39 @@ const Products = () => {
   const handleSubmitProduct = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    console.log('🚀 PRODUCT FORM SUBMISSION STARTED')
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    
     if (!state.accessToken) {
       setError('No access token available')
+      console.error('❌ No access token')
       return
     }
     
     // Validate required fields
     if (!productFormData.title.trim()) {
       setError('Product title is required')
+      console.error('❌ Missing title')
       return
     }
     if (!productFormData.groupSku.trim()) {
       setError('Group SKU is required')
+      console.error('❌ Missing groupSku')
       return
     }
     if (!productFormData.brandId) {
       setError('Brand is required')
+      console.error('❌ Missing brandId')
       return
     }
     if (!productFormData.category.trim()) {
       setError('Category is required')
+      console.error('❌ Missing category')
       return
     }
+    
+    console.log('✅ All required fields validated')
     
     try {
       setIsSubmitting(true)
@@ -991,27 +1040,43 @@ const Products = () => {
       }
       
       // Prepare Sub SKUs (comma-separated)
-      const filteredSubSkus = subSkus.filter(sku => sku.trim() !== '')
-      const subSkuString = filteredSubSkus.join(', ')
+      const filteredSubSkus = subSkus.filter(item => item.sku.trim() !== '')
+      const subSkuString = filteredSubSkus.map(item => item.sku.trim()).join(', ')
       
       // Prepare product features array
       const filteredFeatures = productFeatures.filter(f => f.trim() !== '')
       
-      // Prepare attributes object with correct field names - ensure it's a plain object
-      const attributesTemp: Record<string, any> = {
-        subCategory: productFormData.attributes.sub_category || '',
-        shortDescription: productFormData.attributes.short_description || '',
-        origin: productFormData.attributes.origin || '',
-        shippingLength: parseFloat(productFormData.attributes.shipping_length_in) || 0,
-        shippingWidth: parseFloat(productFormData.attributes.shipping_width_in) || 0,
-        shippingHeight: parseFloat(productFormData.attributes.shipping_height_in) || 0,
-        volume: parseFloat(productFormData.attributes.volume_cuft) || 0,
-        weight: parseFloat(productFormData.attributes.weight_lb) || 0,
-        productDimension: productFormData.attributes.product_dimension_inch || '',
-        style: productFormData.attributes.style || '',
-        material: productFormData.attributes.material || '',
-        color: productFormData.attributes.color || '',
-        features: filteredFeatures
+      // Prepare attributes object - only include non-empty values
+      const attributesTemp: Record<string, any> = {}
+      
+      // Add string attributes only if they have values
+      if (productFormData.attributes.sub_category) attributesTemp.subCategory = productFormData.attributes.sub_category
+      if (productFormData.attributes.short_description) attributesTemp.shortDescription = productFormData.attributes.short_description
+      if (productFormData.attributes.origin) attributesTemp.origin = productFormData.attributes.origin
+      if (productFormData.attributes.product_dimension_inch) attributesTemp.productDimension = productFormData.attributes.product_dimension_inch
+      if (productFormData.attributes.style) attributesTemp.style = productFormData.attributes.style
+      if (productFormData.attributes.material) attributesTemp.material = productFormData.attributes.material
+      if (productFormData.attributes.color) attributesTemp.color = productFormData.attributes.color
+      
+      // Add numeric attributes only if they have values > 0
+      const shippingLength = parseFloat(productFormData.attributes.shipping_length_in)
+      if (shippingLength > 0) attributesTemp.shippingLength = shippingLength
+      
+      const shippingWidth = parseFloat(productFormData.attributes.shipping_width_in)
+      if (shippingWidth > 0) attributesTemp.shippingWidth = shippingWidth
+      
+      const shippingHeight = parseFloat(productFormData.attributes.shipping_height_in)
+      if (shippingHeight > 0) attributesTemp.shippingHeight = shippingHeight
+      
+      const volume = parseFloat(productFormData.attributes.volume_cuft)
+      if (volume > 0) attributesTemp.volume = volume
+      
+      const weight = parseFloat(productFormData.attributes.weight_lb)
+      if (weight > 0) attributesTemp.weight = weight
+      
+      // Add features array only if not empty
+      if (filteredFeatures.length > 0) {
+        attributesTemp.features = filteredFeatures
       }
       
       // Add custom types to attributes
@@ -1025,116 +1090,161 @@ const Products = () => {
       const attributesPayload = JSON.parse(JSON.stringify(attributesTemp))
       
       console.log('📦 Attributes payload:', attributesPayload)
+      console.log('📊 Attributes count:', Object.keys(attributesPayload).length)
       
       // Check if we have files to upload
       const hasMainImageFile = mainImageFile !== null
       const hasGalleryFiles = galleryImageFiles.length > 0
       const useFormData = hasMainImageFile || hasGalleryFiles
       
+      console.log('🔍 Upload method check:')
+      console.log('  - Main image file:', hasMainImageFile ? mainImageFile?.name : 'None')
+      console.log('  - Gallery files:', hasGalleryFiles ? galleryImageFiles.length : 'None')
+      console.log('  - Using FormData:', useFormData)
+      
       let response: Response
       
       if (useFormData) {
         // ========= FormData Method (for file uploads) =========
+        console.log('🚀 Building FormData...')
         const formData = new FormData()
         
-        // Add text fields
+        // Add all core fields
         formData.append('title', productFormData.title)
         formData.append('groupSku', productFormData.groupSku)
         formData.append('subSku', subSkuString)
-        formData.append('brandName', brandName)
+        formData.append('brandId', productFormData.brandId)
         formData.append('category', productFormData.category)
         formData.append('collectionName', productFormData.collectionName || '')
         formData.append('shipTypes', productFormData.shipTypes || 'Standard Shipping')
         formData.append('singleSetItem', productFormData.singleSetItem || 'Single Item')
-        formData.append('brandRealPrice', productFormData.brandRealPrice)
-        formData.append('brandMiscellaneous', productFormData.brandMiscellaneous)
-        formData.append('msrp', productFormData.msrp)
-        formData.append('shippingPrice', productFormData.shippingPrice)
-        formData.append('commissionPrice', productFormData.commissionPrice)
-        formData.append('profitMarginPrice', productFormData.profitMarginPrice)
-        formData.append('ecommerceMiscellaneous', productFormData.ecommerceMiscellaneous)
+        formData.append('brandRealPrice', productFormData.brandRealPrice || '0')
+        formData.append('brandMiscellaneous', productFormData.brandMiscellaneous || '0')
+        formData.append('msrp', productFormData.msrp || '0')
+        formData.append('shippingPrice', productFormData.shippingPrice || '0')
+        formData.append('commissionPrice', productFormData.commissionPrice || '0')
+        formData.append('profitMarginPrice', productFormData.profitMarginPrice || '0')
+        formData.append('ecommerceMiscellaneous', productFormData.ecommerceMiscellaneous || '0')
         
-        // Add main image file (if uploaded)
+        console.log('✅ Core fields added (15 text fields)')
+        
+        // Add main image file - ONLY if uploaded
         if (hasMainImageFile) {
-          formData.append('mainImage', mainImageFile!)
+          formData.append('mainImageUrl', mainImageFile!)
           console.log('📁 Main image: Uploading file -', mainImageFile!.name)
-        } else if (productFormData.mainImageUrl) {
-          // If URL provided but no file, add as URL
+        }
+        // If main image URL is provided (and no file), add it
+        else if (productFormData.mainImageUrl && productFormData.mainImageUrl.trim() !== '') {
           formData.append('mainImageUrl', productFormData.mainImageUrl)
-          console.log('🔗 Main image URL provided alongside files')
+          console.log('🔗 Main image: URL provided -', productFormData.mainImageUrl)
         }
         
-        // Add gallery image files (if uploaded)
+        // Add gallery image files - ONLY if uploaded
         if (hasGalleryFiles) {
           galleryImageFiles.forEach((file, index) => {
-            formData.append('images', file)  // ← Backend expects 'images' field
+            formData.append('galleryImages', file)  // ← Backend expects 'galleryImages' field
             console.log(`📁 Gallery image ${index + 1}: Uploading file -`, file.name)
           })
-        } else {
-          // If URLs provided but no files, add as URLs
+        }
+        // If gallery URLs are provided (and no files), add them as indexed array
+        else {
           const filteredGalleryImages = productFormData.galleryImages.filter(url => url.trim() !== '')
-          filteredGalleryImages.forEach((url) => {
-            formData.append('galleryImageUrls', url)
-          })
           if (filteredGalleryImages.length > 0) {
-            console.log(`🔗 Gallery: ${filteredGalleryImages.length} URL(s) provided alongside files`)
+            filteredGalleryImages.forEach((url, index) => {
+              formData.append(`galleryImages[${index}]`, url)
+            })
+            console.log('🔗 Gallery images: URLs provided -', filteredGalleryImages.length)
           }
         }
         
-        // Add attributes as JSON string
+        // Add attributes as nested fields (not JSON string)
+        // Express with urlencoded extended:true will parse these into an object
+        Object.keys(attributesPayload).forEach((key) => {
+          const value = attributesPayload[key]
+          if (Array.isArray(value)) {
+            // For arrays (like features), send as indexed fields
+            value.forEach((item, index) => {
+              formData.append(`attributes[${key}][${index}]`, String(item))
+            })
+          } else {
+            // For regular values, send as nested field
+            formData.append(`attributes[${key}]`, String(value))
+          }
+        })
         const attributesJSON = JSON.stringify(attributesPayload)
-        formData.append('attributes', attributesJSON)
         
         console.log('=== Sending FormData (multipart/form-data) ===')
         console.log(`Files: ${hasMainImageFile ? '1 main' : '0 main'}, ${hasGalleryFiles ? galleryImageFiles.length : '0'} gallery`)
-        console.log('Attributes JSON:', attributesJSON)
+        console.log('Attributes Object:', attributesJSON)
+        console.log('Attributes count:', Object.keys(attributesPayload).length)
         
-        response = await fetch('http://192.168.0.23:5000/api/products', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${state.accessToken}`,
-            // DON'T set Content-Type for FormData - browser sets it automatically with boundary
-          },
-          body: formData
+        // Debug: Log all FormData keys and values (non-file)
+        const formDataKeys = Array.from(formData.keys())
+        console.log('📋 FormData fields being sent:')
+        formDataKeys.forEach(key => {
+          const value = formData.get(key)
+          if (value instanceof File) {
+            console.log(`  - ${key}: [FILE] ${value.name} (${(value.size / 1024).toFixed(1)} KB)`)
+          } else {
+            console.log(`  - ${key}: ${value}`)
+          }
         })
+        console.log('🌐 Content-Type: multipart/form-data (set automatically by browser)')
+        console.log('🚀 About to send FormData request to: https://192.168.0.23:5000/api/products')
+        
+        try {
+          response = await fetch('https://192.168.0.23:5000/api/products', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${state.accessToken}`,
+              // ⚠️ IMPORTANT: DON'T set Content-Type for FormData!
+              // Browser automatically sets: 'Content-Type': 'multipart/form-data; boundary=----WebKitFormBoundary...'
+            },
+            body: formData
+          })
+          console.log('✅ Request completed, status:', response.status, response.statusText)
+        } catch (fetchError) {
+          console.error('❌ Fetch request failed:', fetchError)
+          throw fetchError
+        }
       } else {
         // ========= JSON Method (for URL-only submission) =========
-        const filteredGalleryImages = productFormData.galleryImages.filter(url => url.trim() !== '')
-        
-        const payload = {
-          groupSku: productFormData.groupSku,
-          subSku: subSkuString,
-          brandName: brandName,
-          title: productFormData.title,
-          category: productFormData.category,
+      const filteredGalleryImages = productFormData.galleryImages.filter(url => url.trim() !== '')
+      
+      const payload = {
+        groupSku: productFormData.groupSku,
+        subSku: subSkuString,
+        brandName: brandName,
+        title: productFormData.title,
+        category: productFormData.category,
           collectionName: productFormData.collectionName || '',
           shipTypes: productFormData.shipTypes || 'Standard Shipping',
           singleSetItem: productFormData.singleSetItem || 'Single Item',
-          brandRealPrice: parseFloat(productFormData.brandRealPrice) || 0,
-          brandMiscellaneous: parseFloat(productFormData.brandMiscellaneous) || 0,
-          msrp: parseFloat(productFormData.msrp) || 0,
-          shippingPrice: parseFloat(productFormData.shippingPrice) || 0,
-          commissionPrice: parseFloat(productFormData.commissionPrice) || 0,
-          profitMarginPrice: parseFloat(productFormData.profitMarginPrice) || 0,
-          ecommerceMiscellaneous: parseFloat(productFormData.ecommerceMiscellaneous) || 0,
-          mainImageUrl: productFormData.mainImageUrl || '',
-          galleryImages: filteredGalleryImages,
-          attributes: attributesPayload
-        }
-        
+        brandRealPrice: parseFloat(productFormData.brandRealPrice) || 0,
+        brandMiscellaneous: parseFloat(productFormData.brandMiscellaneous) || 0,
+        msrp: parseFloat(productFormData.msrp) || 0,
+        shippingPrice: parseFloat(productFormData.shippingPrice) || 0,
+        commissionPrice: parseFloat(productFormData.commissionPrice) || 0,
+        profitMarginPrice: parseFloat(productFormData.profitMarginPrice) || 0,
+        ecommerceMiscellaneous: parseFloat(productFormData.ecommerceMiscellaneous) || 0,
+        mainImageUrl: productFormData.mainImageUrl || '',
+        galleryImages: filteredGalleryImages,
+        attributes: attributesPayload
+      }
+      
         console.log('=== Sending JSON (application/json) ===')
         console.log(`Main Image URL: ${payload.mainImageUrl ? '✓' : '✗'}`)
         console.log(`Gallery URLs: ${filteredGalleryImages.length}`)
         console.log('Backend will download these URLs')
         
-        response = await fetch('http://192.168.0.23:5000/api/products', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${state.accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        })
+        response = await fetch('https://192.168.0.23:5000/api/products', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${state.accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
       }
       
       if (!response.ok) {
@@ -1142,18 +1252,30 @@ const Products = () => {
         let rawText = ''
         try {
           rawText = await response.text()
-          console.error('API Error Response (raw):', rawText)
+          console.error('🔴 API Error Response (raw):', rawText)
           if (rawText) {
             errorData = JSON.parse(rawText)
-            console.error('API Error Response (parsed):', errorData)
+            console.error('🔴 API Error Response (parsed):', errorData)
           }
         } catch (e) {
-          console.error('Could not parse error response:', e)
+          console.error('⚠️ Could not parse error response:', e)
           console.error('Raw text was:', rawText)
         }
-        const errorMsg = errorData.error || errorData.message || errorData.msg || `Failed to create product (${response.status}: ${response.statusText})`
-        const detailMsg = errorData.details ? ` - ${errorData.details}` : ''
-        throw new Error(errorMsg + detailMsg)
+        
+        // Extract error message
+        let errorMsg = 'Failed to create product'
+        if (errorData.error) errorMsg = errorData.error
+        else if (errorData.message) errorMsg = errorData.message
+        else if (errorData.msg) errorMsg = errorData.msg
+        else errorMsg = `Failed to create product (${response.status}: ${response.statusText})`
+        
+        // Add details if present
+        if (errorData.details) {
+          errorMsg += ` - ${errorData.details}`
+        }
+        
+        console.error('🚨 Final error message:', errorMsg)
+        throw new Error(errorMsg)
       }
       
       const data = await response.json()
@@ -1174,31 +1296,41 @@ const Products = () => {
   // Handle main image file selection
   const handleMainImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    console.log('📁 File input changed, files:', e.target.files)
+    
     if (file) {
+      console.log('📁 Processing file:', file.name, file.type, file.size, 'bytes')
+      
       // Validate file type
       if (!file.type.startsWith('image/')) {
         setError('Please select a valid image file')
+        console.error('❌ Invalid file type:', file.type)
         return
       }
       
       // Validate file size (5MB limit)
       if (file.size > 5 * 1024 * 1024) {
         setError('Image size must be less than 5MB')
+        console.error('❌ File too large:', file.size, 'bytes')
         return
       }
       
       setMainImageFile(file)
-      // Don't convert to URL - keep file as is
       // Clear the URL input when file is selected
       setProductFormData({...productFormData, mainImageUrl: ''})
       
+      console.log('✅ Main image file selected:', file.name, `(${(file.size / 1024).toFixed(1)} KB, ${file.type})`)
       setError(null)
+    } else {
+      console.warn('⚠️ No file selected')
     }
   }
   
   // Handle gallery images selection
   const handleGalleryImagesSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
+    
+    if (files.length === 0) return
     
     // Validate each file
     for (const file of files) {
@@ -1208,15 +1340,19 @@ const Products = () => {
       }
       
       if (file.size > 5 * 1024 * 1024) {
-        setError('Each image must be less than 5MB')
+        setError(`Image "${file.name}" is too large. Each image must be less than 5MB`)
         return
       }
     }
     
     setGalleryImageFiles(files)
-    // Don't convert to URL - keep files as is
     // Clear the URL inputs when files are selected
     setProductFormData({...productFormData, galleryImages: ['']})
+    
+    console.log(`✅ ${files.length} gallery file(s) selected:`)
+    files.forEach((f, idx) => {
+      console.log(`  ${idx + 1}. ${f.name} (${(f.size / 1024).toFixed(1)} KB)`)
+    })
     
     setError(null)
   }
@@ -1290,7 +1426,7 @@ const Products = () => {
             attributes: product.attributes
           }
           
-          const response = await fetch('http://192.168.0.23:5000/api/products', {
+          const response = await fetch('https://192.168.0.23:5000/api/products', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${state.accessToken}`,
@@ -1346,7 +1482,7 @@ const Products = () => {
       
       console.log('📁 Importing file:', importFile.name)
       
-      const response = await fetch('http://192.168.0.23:5000/api/products/import', {
+      const response = await fetch('https://192.168.0.23:5000/api/products/import', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -1454,7 +1590,7 @@ const Products = () => {
   
   // Handle multiple Sub SKUs
   const addSubSku = () => {
-    setSubSkus([...subSkus, ''])
+    setSubSkus([...subSkus, { sku: '', quantity: '0' }])
   }
   
   const removeSubSku = (index: number) => {
@@ -1465,7 +1601,7 @@ const Products = () => {
   
   const updateSubSku = (index: number, value: string) => {
     const newSubSkus = [...subSkus]
-    newSubSkus[index] = value
+    newSubSkus[index].sku = value
     setSubSkus(newSubSkus)
   }
   
@@ -1510,7 +1646,7 @@ const Products = () => {
     
     try {
       // Call API to create new brand
-      const response = await fetch('http://192.168.0.23:5000/api/brands', {
+      const response = await fetch('https://192.168.0.23:5000/api/brands', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1594,8 +1730,12 @@ const Products = () => {
       }
     })
     
-    // Populate Sub SKUs (for now just use the main one, can be enhanced later)
-    setSubSkus([product.subSku])
+    // Populate Sub SKUs
+    if (product.subSku) {
+      setSubSkus([{ sku: product.subSku, quantity: '0' }])
+    } else {
+      setSubSkus([{ sku: '', quantity: '0' }])
+    }
     
     // Populate product features
     const features = []
@@ -1635,8 +1775,8 @@ const Products = () => {
       const brandName = selectedBrand?.name || ''
       
       // Prepare Sub SKUs (comma-separated)
-      const filteredSubSkus = subSkus.filter(sku => sku.trim() !== '')
-      const subSkuString = filteredSubSkus.join(', ')
+      const filteredSubSkus = subSkus.filter(item => item.sku.trim() !== '')
+      const subSkuString = filteredSubSkus.map(item => item.sku.trim()).join(', ')
       
       // Prepare product features array
       const filteredFeatures = productFeatures.filter(f => f.trim() !== '')
@@ -1729,7 +1869,7 @@ const Products = () => {
       console.log('==============================')
       
       // Make PUT request to update
-      const response = await fetch(`http://192.168.0.23:5000/api/products/${selectedProduct.id}`, {
+      const response = await fetch(`https://192.168.0.23:5000/api/products/${selectedProduct.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -1787,7 +1927,7 @@ const Products = () => {
       setIsDeleting(true)
       setError(null)
       
-      const response = await fetch(`http://192.168.0.23:5000/api/products/${selectedProduct.id}`, {
+      const response = await fetch(`https://192.168.0.23:5000/api/products/${selectedProduct.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -1991,7 +2131,7 @@ const Products = () => {
   }
   
   // Get column width
-  const getColumnWidth = (columnKey: string, defaultWidth: number = 150) => {
+  const getColumnWidth = (columnKey: string, defaultWidth: number = 170) => {
     return columnWidths[columnKey] || defaultWidth
   }
   
@@ -2224,33 +2364,33 @@ const Products = () => {
                         />
                       </TableHead>
                       {[
-                        { key: 'title', label: 'Title', width: 200 },
+                        { key: 'mainImage', label: 'Image', width: 150 },
+                        { key: 'title', label: 'Title', width: 150 },
                         { key: 'groupSku', label: 'Group SKU', width: 150 },
                         { key: 'subSku', label: 'Sub SKU', width: 150 },
-                        { key: 'category', label: 'Category', width: 130 },
-                        { key: 'collection', label: 'Collection', width: 130 },
-                        { key: 'singleSet', label: 'Single/Set', width: 110 },
-                        { key: 'brandRealPrice', label: 'Brand Real Price', width: 140 },
-                        { key: 'brandMisc', label: 'Brand Misc', width: 120 },
-                        { key: 'brandPrice', label: 'Brand Price', width: 120 },
-                        { key: 'msrp', label: 'MSRP', width: 100 },
-                        { key: 'shippingPrice', label: 'Shipping Price', width: 130 },
-                        { key: 'commission', label: 'Commission', width: 120 },
-                        { key: 'profitMargin', label: 'Profit Margin', width: 130 },
-                        { key: 'ecomMisc', label: 'Ecom Misc', width: 120 },
-                        { key: 'ecomPrice', label: 'Ecom Price', width: 120 },
-                        { key: 'mainImage', label: 'Main Image', width: 100 },
-                        { key: 'gallery', label: 'Gallery', width: 90 },
-                        { key: 'brand', label: 'Brand', width: 130 },
-                        { key: 'info', label: 'Info', width: 80 },
-                        { key: 'actions', label: 'Actions', width: 120 }
+                        { key: 'category', label: 'Category', width: 150 },
+                        { key: 'brand', label: 'Brand', width: 180 },
+                        { key: 'collection', label: 'Collection', width: 150 },
+                        { key: 'singleSet', label: 'Single/Set', width: 150 },
+                        { key: 'brandRealPrice', label: 'Brand Real Price', width: 150 },
+                        { key: 'brandMisc', label: 'Brand Misc', width: 150 },
+                        { key: 'brandPrice', label: 'Brand Price', width: 150 },
+                        { key: 'msrp', label: 'MSRP', width: 150 },
+                        { key: 'shippingPrice', label: 'Shipping Price', width: 150 },
+                        { key: 'commission', label: 'Commission', width: 150 },
+                        { key: 'profitMargin', label: 'Profit Margin', width: 150 },
+                        { key: 'ecomMisc', label: 'Ecom Misc', width: 150 },
+                        { key: 'ecomPrice', label: 'Ecom Price', width: 150 },
+                        { key: 'gallery', label: 'Gallery', width: 150 },
+                        { key: 'info', label: 'Info', width: 150 },
+                        { key: 'actions', label: 'Actions', width: 150 }
                       ].map((col) => (
                         <TableHead 
                           key={col.key}
-                          className="whitespace-nowrap relative group"
+                          className="whitespace-nowrap relative group text-center"
                           style={{ width: `${getColumnWidth(col.key, col.width)}px`, minWidth: '50px' }}
                         >
-                          <div className="flex items-center justify-between pr-2">
+                          <div className="flex items-center justify-center pr-2">
                             <span>{col.label}</span>
                             <div
                               className="absolute right-0 top-0 bottom-0  cursor-col-resize bg-gray-400  dark:bg-gray-600 hover:bg-blue-400 dark:hover:bg-blue-500 transition-colors border-r-2 border-transparent hover:border-blue-500"
@@ -2276,77 +2416,25 @@ const Products = () => {
                             className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                           />
                         </TableCell>
-                        <TableCell className="font-medium" style={{ width: `${getColumnWidth('title', 200)}px` }}>
-                          {renderExpandableCell(product.title, product.id, 'title', 200)}
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('groupSku', 150)}px` }}>
-                          {renderExpandableCell(product.groupSku, product.id, 'groupSku', 150)}
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('subSku', 150)}px` }}>
-                          {renderExpandableCell(product.subSku, product.id, 'subSku', 150)}
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('category', 130)}px` }}>
-                          <Badge variant="outline" className="whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-300 dark:border-purple-700">
-                            {product.category}
-                          </Badge>
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('collection', 130)}px` }}>
-                          {renderExpandableCell(product.collectionName, product.id, 'collection', 130)}
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('singleSet', 110)}px` }}>
-                          <Badge variant="outline" className="whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-300 dark:border-blue-700">
-                            {product.singleSetItem}
-                          </Badge>
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('brandRealPrice', 140)}px` }}>
-                          <div className="whitespace-nowrap text-green-600 dark:text-green-400 font-semibold">
-                            ${formatCurrency(product.brandRealPrice)}
-                          </div>
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('brandMisc', 120)}px` }}>
-                          <div className="whitespace-nowrap">${formatCurrency(product.brandMiscellaneous)}</div>
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('brandPrice', 120)}px` }}>
-                          <div className="whitespace-nowrap text-green-600 dark:text-green-400 font-semibold">
-                            ${formatCurrency(product.brandPrice)}
-                          </div>
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('msrp', 100)}px` }}>
-                          <div className="whitespace-nowrap text-blue-600 dark:text-blue-400 font-semibold">
-                            ${formatCurrency(product.msrp)}
-                          </div>
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('shippingPrice', 130)}px` }}>
-                          <div className="whitespace-nowrap">${formatCurrency(product.shippingPrice)}</div>
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('commission', 120)}px` }}>
-                          <div className="whitespace-nowrap">${formatCurrency(product.commissionPrice)}</div>
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('profitMargin', 130)}px` }}>
-                          <div className="whitespace-nowrap text-orange-600 dark:text-orange-400">
-                            ${formatCurrency(product.profitMarginPrice)}
-                          </div>
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('ecomMisc', 120)}px` }}>
-                          <div className="whitespace-nowrap">${formatCurrency(product.ecommerceMiscellaneous)}</div>
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('ecomPrice', 120)}px` }}>
-                          <div className="whitespace-nowrap text-indigo-600 dark:text-indigo-400 font-semibold">
-                            ${formatCurrency(product.ecommercePrice)}
-                          </div>
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('mainImage', 100)}px` }}>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('mainImage', 170)}px` }}>
                           <div className="flex justify-center">
                             {product.mainImageUrl ? (
                               <button
-                                onClick={() => handleImagePreview(product.mainImageUrl!, product.title)}
-                                className="hover:scale-105 transition-transform cursor-pointer rounded overflow-hidden border-2 border-emerald-500 dark:border-emerald-400"
-                                title={`Click to view: ${product.mainImageUrl}`}
+                                onClick={() => {
+                                  // Collect all images (main + gallery)
+                                  const allImages = [product.mainImageUrl!]
+                                  if (product.galleryImages && product.galleryImages.length > 0) {
+                                    allImages.push(...product.galleryImages)
+                                  }
+                                  handleGalleryPreview(allImages, product.title)
+                                }}
+                                className="hover:scale-105 transition-transform cursor-pointer rounded-full overflow-hidden border-2 border-emerald-500 dark:border-emerald-400"
+                                title={`Click to view all images`}
                               >
                                 <img 
                                   src={getProxiedImageUrl(product.mainImageUrl) || ''} 
                                   alt={product.title}
-                                  className="w-16 h-16 object-cover"
+                                  className="w-10 h-10 rounded-full object-cover"
                                   referrerPolicy="no-referrer"
                                   loading="lazy"
                                   onError={(e) => {
@@ -2356,33 +2444,94 @@ const Products = () => {
                                     target.style.display = 'none'
                                     const parent = target.parentElement
                                     if (parent) {
-                                      parent.innerHTML = '<div class="w-16 h-16 flex items-center justify-center bg-red-100 dark:bg-red-900/20 rounded" title="Image failed to load - check console"><svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div>'
+                                      parent.innerHTML = '<div class="w-10 h-10 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/20 rounded" title="Image failed to load - check console"><svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div>'
                                     }
-                                  }}
-                                  onLoad={() => {
-                                    console.log('✓ Image loaded successfully:', product.mainImageUrl)
                                   }}
                                 />
                               </button>
                             ) : (
-                              <div className="w-16 h-16 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded" title="No image">
-                                <ImageIcon className="h-5 w-5 text-gray-300 dark:text-gray-600" />
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 rounded">
+                                <ImageIcon className="h-5 w-5 text-gray-400" />
                               </div>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('gallery', 120)}px` }}>
+                        <TableCell className="font-medium text-center" style={{ width: `${getColumnWidth('title', 170)}px` }}>
+                          {renderExpandableCell(product.title, product.id, 'title', 170)}
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('groupSku', 170)}px` }}>
+                          {renderExpandableCell(product.groupSku, product.id, 'groupSku', 170)}
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('subSku', 170)}px` }}>
+                          {renderExpandableCell(product.subSku, product.id, 'subSku', 170)}
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('category', 170)}px` }}>
+                          <Badge variant="outline" className="whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-300 dark:border-purple-700">
+                            {product.category}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('brand', 170)}px` }}>
+                          <Badge variant="outline" className="whitespace-nowrap bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 border-teal-300 dark:border-teal-700">
+                            {product.brand?.name || '-'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('collection', 170)}px` }}>
+                          {renderExpandableCell(product.collectionName, product.id, 'collection', 170)}
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('singleSet', 170)}px` }}>
+                          <Badge variant="outline" className="whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-300 dark:border-blue-700">
+                            {product.singleSetItem}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('brandRealPrice', 170)}px` }}>
+                          <div className="whitespace-nowrap text-green-600 dark:text-green-400 font-semibold">
+                            ${formatCurrency(product.brandRealPrice)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('brandMisc', 170)}px` }}>
+                          <div className="whitespace-nowrap">${formatCurrency(product.brandMiscellaneous)}</div>
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('brandPrice', 170)}px` }}>
+                          <div className="whitespace-nowrap text-green-600 dark:text-green-400 font-semibold">
+                            ${formatCurrency(product.brandPrice)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('msrp', 170)}px` }}>
+                          <div className="whitespace-nowrap text-blue-600 dark:text-blue-400 font-semibold">
+                            ${formatCurrency(product.msrp)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('shippingPrice', 170)}px` }}>
+                          <div className="whitespace-nowrap">${formatCurrency(product.shippingPrice)}</div>
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('commission', 170)}px` }}>
+                          <div className="whitespace-nowrap">${formatCurrency(product.commissionPrice)}</div>
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('profitMargin', 170)}px` }}>
+                          <div className="whitespace-nowrap text-orange-600 dark:text-orange-400">
+                            ${formatCurrency(product.profitMarginPrice)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('ecomMisc', 170)}px` }}>
+                          <div className="whitespace-nowrap">${formatCurrency(product.ecommerceMiscellaneous)}</div>
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('ecomPrice', 170)}px` }}>
+                          <div className="whitespace-nowrap text-indigo-600 dark:text-indigo-400 font-semibold">
+                            ${formatCurrency(product.ecommercePrice)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('gallery', 170)}px` }}>
                           <div className="flex justify-center">
                             {product.galleryImages && product.galleryImages.length > 0 ? (
                               <button
                                 onClick={() => handleGalleryPreview(product.galleryImages!, product.title)}
-                                className="hover:scale-105 transition-transform cursor-pointer rounded overflow-hidden border-2 border-cyan-500 dark:border-cyan-400 relative"
+                                className="hover:scale-105 transition-transform cursor-pointer rounded-full overflow-hidden border-2 border-cyan-500 dark:border-cyan-400 relative"
                                 title={`Click to view ${product.galleryImages.length} images: ${product.galleryImages[0]}`}
                               >
                                 <img 
                                   src={getProxiedImageUrl(product.galleryImages[0]) || ''} 
                                   alt={`${product.title} - Gallery`}
-                                  className="w-16 h-16 object-cover"
+                                  className="w-10 h-10 object-cover"
                                   referrerPolicy="no-referrer"
                                   loading="lazy"
                                   onError={(e) => {
@@ -2394,7 +2543,7 @@ const Products = () => {
                                     const parent = target.parentElement
                                     if (parent) {
                                       const imgCount = product.galleryImages?.length || 0
-                                      parent.innerHTML = '<div class="w-16 h-16 flex items-center justify-center bg-red-100 dark:bg-red-900/20 rounded" title="Gallery images failed to load - check console"><svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div><span class="absolute top-0 right-0 bg-cyan-500 text-white text-xs font-bold rounded-bl px-1.5 py-0.5 shadow-lg">' + imgCount + '</span>'
+                                      parent.innerHTML = '<div class="w-10 h-10 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/20 rounded" title="Gallery images failed to load - check console"><svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div><span class="absolute top-0 right-0 bg-cyan-500 text-white text-xs font-bold rounded-bl px-1.5 py-0.5 shadow-lg">' + imgCount + '</span>'
                                     }
                                   }}
                                   onLoad={() => {
@@ -2406,16 +2555,13 @@ const Products = () => {
                                 </span>
                               </button>
                             ) : (
-                              <div className="w-16 h-16 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded" title="No gallery images">
-                                <Images className="h-5 w-5 text-gray-300 dark:text-gray-600" />
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded" title="No gallery images">
+                              <Images className="h-5 w-5 text-gray-300 dark:text-gray-600" />
                               </div>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('brand', 130)}px` }}>
-                          {renderExpandableCell(product.brand?.name || '-', product.id, 'brand', 130)}
-                        </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('info', 80)}px` }}>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('info', 170)}px` }}>
                           <Button
                             onClick={() => handleShowInfo(product)}
                             variant="ghost"
@@ -2425,13 +2571,13 @@ const Products = () => {
                             <Info className="h-4 w-4 text-blue-500 dark:text-blue-400" />
                           </Button>
                         </TableCell>
-                        <TableCell style={{ width: `${getColumnWidth('actions', 120)}px` }}>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('actions', 170)}px` }}>
                           <div className="flex items-center justify-center gap-2">
                             <Button
                               onClick={() => handleEditProduct(product)}
                               variant="ghost"
                               size="sm"
-                              className="h-8 w-8 p-0 hover:bg-amber-100 dark:hover:bg-amber-900/30"
+                              className="h-8 w-8 p-0 hover:bg-amber-100 dark:hover:bg-amber-900/30 text-center"
                               title="Edit Product"
                             >
                               <Edit className="h-4 w-4 text-amber-600 dark:text-amber-400" />
@@ -2515,53 +2661,224 @@ const Products = () => {
       {/* Info Modal */}
       {showInfoModal && selectedProductInfo && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
+          <div className="bg-white dark:bg-slate-800 rounded-lg max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between z-10">
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-slate-100">
                 Product Details
               </h3>
               <Button
                 onClick={handleCloseInfo}
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-slate-700"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </Button>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              
-              {/* Pricing Info */}
-              <div className="space-y-3">
-                
-                <div>
-                  <label className="text-sm font-medium text-gray-500 dark:text-slate-400">Brand</label>
-                  <p className="text-gray-900 dark:text-slate-100">{selectedProductInfo.brand?.name || '-'}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500 dark:text-slate-400">Created At:</label>
-                  <p className="text-gray-900 dark:text-slate-100">{formatDate(selectedProductInfo.createdAt)}</p>
-                  <label className="text-sm font-medium text-gray-500 dark:text-slate-400">Updated At:</label>
-                  <p className="text-gray-900 dark:text-slate-100">{formatDate(selectedProductInfo.updatedAt)}</p>
-
-
-                </div>
-              </div>
-              
-              {/* Attributes */}
-              {selectedProductInfo.attributes && (
-                <div className="md:col-span-2">
-                  <label className="text-sm font-medium text-gray-500 dark:text-slate-400 mb-2 block">Attributes</label>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 bg-gray-50 dark:bg-slate-700/50 p-4 rounded-lg">
-                    {Object.entries(selectedProductInfo.attributes).map(([key, value]) => (
-                      <div key={key}>
-                        <span className="text-xs text-gray-500 dark:text-slate-400">{key.replace(/_/g, ' ')}:</span>
-                        <p className="text-sm text-gray-900 dark:text-slate-100">{value?.toString() || '-'}</p>
+            <div className="p-6 space-y-6">
+              {/* Images Section */}
+              {(selectedProductInfo.mainImageUrl || (selectedProductInfo.galleryImages && selectedProductInfo.galleryImages.length > 0)) && (
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700/50 dark:to-slate-800/50 rounded-lg p-6 border border-blue-200 dark:border-slate-600">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4 flex items-center gap-2">
+                    <ImageIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    Product Images
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {selectedProductInfo.mainImageUrl && (
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 dark:text-slate-400 mb-2">Main Image</p>
+                        <img
+                          src={getProxiedImageUrl(selectedProductInfo.mainImageUrl) || ''}
+                          alt="Main"
+                          onClick={() => {
+                            // Collect all images (main + gallery)
+                            const allImages = [selectedProductInfo.mainImageUrl!]
+                            if (selectedProductInfo.galleryImages && selectedProductInfo.galleryImages.length > 0) {
+                              allImages.push(...selectedProductInfo.galleryImages)
+                            }
+                            handleGalleryPreview(allImages, selectedProductInfo.title)
+                          }}
+                          className="w-full h-40 object-cover rounded-full border-2 border-emerald-500 dark:border-emerald-400 shadow-md cursor-pointer hover:scale-105 transition-transform"
+                        />
+                      </div>
+                    )}
+                    {selectedProductInfo.galleryImages && selectedProductInfo.galleryImages.map((img, idx) => (
+                      <div key={idx}>
+                        <p className="text-xs font-medium text-gray-600 dark:text-slate-400 mb-2">Gallery {idx + 1}</p>
+                        <img
+                          src={getProxiedImageUrl(img) || ''}
+                          alt={`Gallery ${idx + 1}`}
+                          onClick={() => {
+                            // Collect all images (main + gallery)
+                            const allImages = [selectedProductInfo.mainImageUrl!]
+                            if (selectedProductInfo.galleryImages && selectedProductInfo.galleryImages.length > 0) {
+                              allImages.push(...selectedProductInfo.galleryImages)
+                            }
+                            handleGalleryPreview(allImages, selectedProductInfo.title)
+                          }}
+                          className="w-full h-40 object-cover rounded-lg border-2 border-cyan-500 dark:border-cyan-400 shadow-md cursor-pointer hover:scale-105 transition-transform"
+                        />
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Description Section */}
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-slate-700/50 dark:to-slate-800/50 rounded-lg p-6 border border-purple-200 dark:border-slate-600">
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">Description</h4>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50 w-48">Title</TableCell>
+                        <TableCell className="font-medium">{selectedProductInfo.title}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Brand</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 border-teal-300 dark:border-teal-700">
+                            {selectedProductInfo.brand?.name || '-'}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Group SKU</TableCell>
+                        <TableCell className="font-mono text-sm">{selectedProductInfo.groupSku}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Sub SKU</TableCell>
+                        <TableCell className="font-mono text-sm">{selectedProductInfo.subSku}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Category</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-300 dark:border-purple-700">
+                            {selectedProductInfo.category}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Collection Name</TableCell>
+                        <TableCell>{selectedProductInfo.collectionName || '-'}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Single/Set Item</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-300 dark:border-blue-700">
+                            {selectedProductInfo.singleSetItem}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Ship Types</TableCell>
+                        <TableCell>{selectedProductInfo.shipTypes || '-'}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Created At</TableCell>
+                        <TableCell>{formatDate(selectedProductInfo.createdAt)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Updated At</TableCell>
+                        <TableCell>{formatDate(selectedProductInfo.updatedAt)}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* Pricing Information */}
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-slate-700/50 dark:to-slate-800/50 rounded-lg p-6 border border-green-200 dark:border-slate-600">
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">Pricing Information</h4>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50 w-48">Brand Real Price</TableCell>
+                        <TableCell className="text-green-600 dark:text-green-400 font-semibold">${formatCurrency(selectedProductInfo.brandRealPrice)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Brand Miscellaneous</TableCell>
+                        <TableCell>${formatCurrency(selectedProductInfo.brandMiscellaneous)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Brand Price</TableCell>
+                        <TableCell className="text-green-600 dark:text-green-400 font-semibold">${formatCurrency(selectedProductInfo.brandPrice)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">MSRP</TableCell>
+                        <TableCell className="text-blue-600 dark:text-blue-400 font-semibold">${formatCurrency(selectedProductInfo.msrp)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Shipping Price</TableCell>
+                        <TableCell>${formatCurrency(selectedProductInfo.shippingPrice)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Commission Price</TableCell>
+                        <TableCell>${formatCurrency(selectedProductInfo.commissionPrice)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Profit Margin Price</TableCell>
+                        <TableCell className="text-orange-600 dark:text-orange-400 font-semibold">${formatCurrency(selectedProductInfo.profitMarginPrice)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Ecommerce Miscellaneous</TableCell>
+                        <TableCell>${formatCurrency(selectedProductInfo.ecommerceMiscellaneous)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Ecommerce Price</TableCell>
+                        <TableCell className="text-indigo-600 dark:text-indigo-400 font-semibold text-lg">${formatCurrency(selectedProductInfo.ecommercePrice)}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* Attributes */}
+              {selectedProductInfo.attributes && Object.keys(selectedProductInfo.attributes).length > 0 && (
+                <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-slate-700/50 dark:to-slate-800/50 rounded-lg p-6 border border-amber-200 dark:border-slate-600">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">Product Attributes</h4>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableBody>
+                        {Object.entries(selectedProductInfo.attributes).map(([key, value]) => {
+                          // Format key nicely
+                          const formattedKey = key
+                            .replace(/_/g, ' ')
+                            .replace(/([A-Z])/g, ' $1')
+                            .replace(/^./, str => str.toUpperCase())
+                            .trim()
+                          
+                          // Format value based on type
+                          let displayValue = '-'
+                          if (value !== null && value !== undefined) {
+                            if (Array.isArray(value)) {
+                              displayValue = value.join(', ')
+                            } else if (typeof value === 'object') {
+                              displayValue = JSON.stringify(value)
+                            } else {
+                              displayValue = value.toString()
+                            }
+                          }
+                          
+                          return (
+                            <TableRow key={key}>
+                              <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50 w-48 capitalize">{formattedKey}</TableCell>
+                              <TableCell className="break-words">{displayValue}</TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+              
+              {/* Show message if no attributes */}
+              {selectedProductInfo.attributes && Object.keys(selectedProductInfo.attributes).length === 0 && (
+                <div className="bg-gray-50 dark:bg-slate-700/50 p-6 rounded-lg border border-gray-200 dark:border-slate-600 text-center">
+                  <p className="text-gray-500 dark:text-slate-400">No attributes defined for this product</p>
                 </div>
               )}
             </div>
@@ -2652,41 +2969,88 @@ const Products = () => {
                     />
                   </div>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  <div className="md:col-span-3">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                       Sub SKU <span className="text-red-500">*</span>
                     </label>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">Add sub SKUs with their respective quantities</p>
+                    <div className="flex gap-3 mb-2">
+                      <div className="flex-1">
+                        <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Sub SKU</label>
+                      </div>
+                      <div className="w-40">
+                        <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Quantity</label>
+                      </div>
+                      <div className="w-24"></div>
+                    </div>
                     <div className="space-y-2">
-                      {subSkus.map((subSku, index) => (
-                        <div key={index} className="flex gap-2">
-                          <Input
-                            type="text"
-                            value={subSku}
-                            onChange={(e) => updateSubSku(index, e.target.value)}
-                            className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
-                            placeholder={`Sub SKU ${index + 1}`}
-                            required={index === 0}
-                          />
-                          {index === subSkus.length - 1 && (
+                      {subSkus.map((item, index) => (
+                        <div key={index} className="flex gap-3">
+                          <div className="flex-1">
+                            <Input
+                              type="text"
+                              value={item.sku}
+                              onChange={(e) => updateSubSku(index, e.target.value)}
+                              className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                              placeholder={`Sub SKU ${index + 1}`}
+                              required={index === 0}
+                            />
+                          </div>
+                          <div className="w-40 flex items-center gap-1">
                             <Button
                               type="button"
-                              onClick={addSubSku}
+                              onClick={() => {
+                                const newSubSkus = [...subSkus]
+                                const currentQty = parseInt(newSubSkus[index].quantity) || 0
+                                newSubSkus[index].quantity = Math.max(0, currentQty - 1).toString()
+                                setSubSkus(newSubSkus)
+                              }}
+                              variant="outline"
                               size="sm"
-                              className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm"
+                              className="h-9 w-9 p-0"
                             >
-                              <Plus className="h-4 w-4" />
+                              <Minus className="w-3 h-3" />
                             </Button>
-                          )}
-                          {index > 0 && (
+                            <div className="flex-1 text-center font-semibold text-sm py-2 px-2 border rounded bg-gray-50 dark:bg-gray-700">
+                              {item.quantity || '0'}
+                            </div>
                             <Button
                               type="button"
-                              onClick={() => removeSubSku(index)}
+                              onClick={() => {
+                                const newSubSkus = [...subSkus]
+                                const currentQty = parseInt(newSubSkus[index].quantity) || 0
+                                newSubSkus[index].quantity = (currentQty + 1).toString()
+                                setSubSkus(newSubSkus)
+                              }}
+                              variant="outline"
                               size="sm"
-                              className="bg-rose-500 hover:bg-rose-600 text-white shadow-sm"
+                              className="h-9 w-9 p-0"
                             >
-                              <X className="h-4 w-4" />
+                              <Plus className="w-3 h-3" />
                             </Button>
-                          )}
+                          </div>
+                          <div className="w-24 flex gap-2">
+                            {index === subSkus.length - 1 && (
+                              <Button
+                                type="button"
+                                onClick={addSubSku}
+                                size="sm"
+                                className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm flex-1"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {index > 0 && (
+                              <Button
+                                type="button"
+                                onClick={() => removeSubSku(index)}
+                                size="sm"
+                                className="bg-rose-500 hover:bg-rose-600 text-white shadow-sm flex-1"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -2717,6 +3081,18 @@ const Products = () => {
                     />
                   </div>
                   
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      Ship Types
+                    </label>
+                    <Input
+                      type="text"
+                      value={productFormData.shipTypes}
+                      onChange={(e) => setProductFormData({...productFormData, shipTypes: e.target.value})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                      placeholder="e.g. Standard Shipping, White Glove"
+                    />
+                  </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
@@ -3119,21 +3495,45 @@ const Products = () => {
                         Upload File
                       </Button>
                     </div>
-                    {productFormData.mainImageUrl && (
+                    {(mainImageFile || productFormData.mainImageUrl) && (
                       <div className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-gray-200 dark:border-slate-600">
+                        {mainImageFile ? (
+                          <>
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br from-emerald-100 to-green-100 dark:from-emerald-900/30 dark:to-green-900/30 rounded border-2 border-emerald-500 dark:border-emerald-400 relative">
+                              <Upload className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                              <div className="absolute -top-1 -right-1 bg-green-500 rounded-full p-0.5">
+                                <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+                                </svg>
+                              </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">File Ready to Upload</p>
+                              <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                                📎 {mainImageFile.name}
+                              </p>
+                              <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                                {(mainImageFile.size / 1024).toFixed(1)} KB • {mainImageFile.type}
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
                         <img 
                           src={productFormData.mainImageUrl} 
                           alt="Main image preview" 
-                          className="w-16 h-16 object-cover rounded border border-gray-300 dark:border-slate-500"
+                          className="w-10 h-10 rounded-full object-cover rounded border border-gray-300 dark:border-slate-500"
                           onError={(e) => {
                             (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="64" height="64"%3E%3Crect fill="%23ddd" width="64" height="64"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E'
                           }}
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                            {mainImageFile ? `📎 ${mainImageFile.name}` : '🔗 URL provided'}
+                                🔗 URL provided
                           </p>
                         </div>
+                          </>
+                        )}
                         <Button
                           type="button"
                           onClick={() => {
@@ -3142,9 +3542,9 @@ const Products = () => {
                           }}
                           size="sm"
                           variant="ghost"
-                          className="h-6 w-6 p-0"
+                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
                         >
-                          <X className="h-3 w-3" />
+                          <X className="h-4 w-4" />
                         </Button>
                       </div>
                     )}
@@ -3230,9 +3630,25 @@ const Products = () => {
                         Upload Gallery Files
                       </Button>
                       {galleryImageFiles.length > 0 && (
-                        <p className="text-xs text-green-600 dark:text-green-400 mt-2">
-                          📎 {galleryImageFiles.length} file(s) selected: {galleryImageFiles.map(f => f.name).join(', ')}
-                        </p>
+                        <div className="mt-2 p-3 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-2 border-emerald-500 dark:border-emerald-400 rounded-lg">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="bg-green-500 rounded-full p-1">
+                              <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+                              </svg>
+                            </div>
+                            <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                              {galleryImageFiles.length} Gallery File{galleryImageFiles.length !== 1 ? 's' : ''} Ready
+                            </p>
+                          </div>
+                          <div className="space-y-1">
+                            {galleryImageFiles.map((f, idx) => (
+                              <p key={idx} className="text-xs text-gray-700 dark:text-gray-300 truncate">
+                                {idx + 1}. {f.name} <span className="text-emerald-600 dark:text-emerald-400">({(f.size / 1024).toFixed(1)} KB)</span>
+                              </p>
+                            ))}
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -3347,45 +3763,93 @@ const Products = () => {
                     />
                   </div>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  <div className="md:col-span-3">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                       Sub SKU <span className="text-red-500">*</span>
                     </label>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">Edit sub SKUs with their respective quantities</p>
+                    <div className="flex gap-3 mb-2">
+                      <div className="flex-1">
+                        <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Sub SKU</label>
+                      </div>
+                      <div className="w-40">
+                        <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Quantity</label>
+                      </div>
+                      <div className="w-24"></div>
+                    </div>
                     <div className="space-y-2">
-                      {subSkus.map((subSku, index) => (
-                        <div key={index} className="flex gap-2">
-                          <Input
-                            type="text"
-                            value={subSku}
-                            onChange={(e) => updateSubSku(index, e.target.value)}
-                            className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
-                            placeholder={`Sub SKU ${index + 1}`}
-                            required={index === 0}
-                          />
-                          {index === subSkus.length - 1 && (
+                      {subSkus.map((item, index) => (
+                        <div key={index} className="flex gap-3">
+                          <div className="flex-1">
+                            <Input
+                              type="text"
+                              value={item.sku}
+                              onChange={(e) => updateSubSku(index, e.target.value)}
+                              className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                              placeholder={`Sub SKU ${index + 1}`}
+                              required={index === 0}
+                            />
+                          </div>
+                          <div className="w-40 flex items-center gap-1">
                             <Button
                               type="button"
-                              onClick={addSubSku}
+                              onClick={() => {
+                                const newSubSkus = [...subSkus]
+                                const currentQty = parseInt(newSubSkus[index].quantity) || 0
+                                newSubSkus[index].quantity = Math.max(0, currentQty - 1).toString()
+                                setSubSkus(newSubSkus)
+                              }}
+                              variant="outline"
                               size="sm"
-                              className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm"
+                              className="h-9 w-9 p-0"
                             >
-                              <Plus className="h-4 w-4" />
+                              <Minus className="w-3 h-3" />
                             </Button>
-                          )}
-                          {index > 0 && (
+                            <div className="flex-1 text-center font-semibold text-sm py-2 px-2 border rounded bg-gray-50 dark:bg-gray-700">
+                              {item.quantity || '0'}
+                            </div>
                             <Button
                               type="button"
-                              onClick={() => removeSubSku(index)}
+                              onClick={() => {
+                                const newSubSkus = [...subSkus]
+                                const currentQty = parseInt(newSubSkus[index].quantity) || 0
+                                newSubSkus[index].quantity = (currentQty + 1).toString()
+                                setSubSkus(newSubSkus)
+                              }}
+                              variant="outline"
                               size="sm"
-                              className="bg-rose-500 hover:bg-rose-600 text-white shadow-sm"
+                              className="h-9 w-9 p-0"
                             >
-                              <X className="h-4 w-4" />
+                              <Plus className="w-3 h-3" />
                             </Button>
-                          )}
+                          </div>
+                          <div className="w-24 flex gap-2">
+                            {index === subSkus.length - 1 && (
+                              <Button
+                                type="button"
+                                onClick={addSubSku}
+                                size="sm"
+                                className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm flex-1"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {index > 0 && (
+                              <Button
+                                type="button"
+                                onClick={() => removeSubSku(index)}
+                                size="sm"
+                                className="bg-rose-500 hover:bg-rose-600 text-white shadow-sm flex-1"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
+... 1825 lines not shown ...
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
@@ -3409,6 +3873,19 @@ const Products = () => {
                       value={productFormData.collectionName}
                       onChange={(e) => setProductFormData({...productFormData, collectionName: e.target.value})}
                       className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      Ship Types
+                    </label>
+                    <Input
+                      type="text"
+                      value={productFormData.shipTypes}
+                      onChange={(e) => setProductFormData({...productFormData, shipTypes: e.target.value})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                      placeholder="e.g. Standard Shipping, White Glove"
                     />
                   </div>
                   
@@ -3811,21 +4288,45 @@ const Products = () => {
                         Upload File
                       </Button>
                     </div>
-                    {productFormData.mainImageUrl && (
+                    {(mainImageFile || productFormData.mainImageUrl) && (
                       <div className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-gray-200 dark:border-slate-600">
+                        {mainImageFile ? (
+                          <>
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br from-emerald-100 to-green-100 dark:from-emerald-900/30 dark:to-green-900/30 rounded border-2 border-emerald-500 dark:border-emerald-400 relative">
+                              <Upload className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                              <div className="absolute -top-1 -right-1 bg-green-500 rounded-full p-0.5">
+                                <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+                                </svg>
+                              </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">File Ready to Upload</p>
+                              <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                                📎 {mainImageFile.name}
+                              </p>
+                              <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                                {(mainImageFile.size / 1024).toFixed(1)} KB • {mainImageFile.type}
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
                         <img 
                           src={productFormData.mainImageUrl} 
                           alt="Main image preview" 
-                          className="w-16 h-16 object-cover rounded border border-gray-300 dark:border-slate-500"
+                          className="w-10 h-10 rounded-full object-cover rounded border border-gray-300 dark:border-slate-500"
                           onError={(e) => {
                             (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="64" height="64"%3E%3Crect fill="%23ddd" width="64" height="64"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E'
                           }}
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                            {mainImageFile ? `📎 ${mainImageFile.name}` : '🔗 URL provided'}
+                                🔗 URL provided
                           </p>
                         </div>
+                          </>
+                        )}
                         <Button
                           type="button"
                           onClick={() => {
@@ -3834,9 +4335,9 @@ const Products = () => {
                           }}
                           size="sm"
                           variant="ghost"
-                          className="h-6 w-6 p-0"
+                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
                         >
-                          <X className="h-3 w-3" />
+                          <X className="h-4 w-4" />
                         </Button>
                       </div>
                     )}
@@ -3922,9 +4423,25 @@ const Products = () => {
                         Upload Gallery Files
                       </Button>
                       {galleryImageFiles.length > 0 && (
-                        <p className="text-xs text-green-600 dark:text-green-400 mt-2">
-                          📎 {galleryImageFiles.length} file(s) selected: {galleryImageFiles.map(f => f.name).join(', ')}
-                        </p>
+                        <div className="mt-2 p-3 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-2 border-emerald-500 dark:border-emerald-400 rounded-lg">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="bg-green-500 rounded-full p-1">
+                              <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+                              </svg>
+                            </div>
+                            <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                              {galleryImageFiles.length} Gallery File{galleryImageFiles.length !== 1 ? 's' : ''} Ready
+                            </p>
+                          </div>
+                          <div className="space-y-1">
+                            {galleryImageFiles.map((f, idx) => (
+                              <p key={idx} className="text-xs text-gray-700 dark:text-gray-300 truncate">
+                                {idx + 1}. {f.name} <span className="text-emerald-600 dark:text-emerald-400">({(f.size / 1024).toFixed(1)} KB)</span>
+                              </p>
+                            ))}
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -5067,6 +5584,44 @@ const Products = () => {
               >
                 {isSubmittingListings ? 'Submitting...' : `Submit ${listingsData.length} Listing${listingsData.length !== 1 ? 's' : ''}`}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Fullscreen Image Modal */}
+      {showFullscreenImage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-[60] p-4"
+          onClick={() => setShowFullscreenImage(false)}
+        >
+          <div className="relative max-w-7xl w-full h-full flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4 px-4">
+              <h3 className="text-xl font-semibold text-white">{fullscreenImageTitle}</h3>
+              <Button
+                onClick={() => setShowFullscreenImage(false)}
+                variant="ghost"
+                size="sm"
+                className="h-10 w-10 p-0 text-white hover:bg-white/20"
+              >
+                <X className="h-6 w-6" />
+              </Button>
+            </div>
+            
+            {/* Image */}
+            <div className="flex-1 flex items-center justify-center">
+              <img
+                src={getProxiedImageUrl(fullscreenImageUrl) || ''}
+                alt={fullscreenImageTitle}
+                className="max-w-full max-h-full object-contain"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+            
+            {/* Instructions */}
+            <div className="text-center text-white/70 text-sm mt-4">
+              Click anywhere outside the image to close
             </div>
           </div>
         </div>
