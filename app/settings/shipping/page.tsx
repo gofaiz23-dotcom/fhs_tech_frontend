@@ -263,16 +263,29 @@ export default function ShippingPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button
+            {/* Search and Filter */}       
+              <div className="relative ">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="   Search shipping companies..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="input-soft  pl-10 pr-4 py-2 w-64"
+                />
+              </div>
+ 
+            <Button
               onClick={loadShippingCompanies}
               disabled={loading}
-              className="btn-ghost text-sm flex items-center gap-2 disabled:opacity-50"
+              varient="outline"
+              size="sm"
               title="Refresh shipping companies"
             >
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
-            {isAdminUser && (
+              <span className="hidden pl-1 sm:inline">Refresh</span>
+            </Button>
+            {isAdmin() && (
               <UnifiedAddNew
                 platformType="shipping"
                 onAddShipping={openAddModal}
@@ -283,19 +296,6 @@ export default function ShippingPage() {
           </div>
         </div>
 
-        {/* Search and Filter */}
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder="Search shipping companies..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-        </div>
 
         {/* Error Display */}
         {error && (

@@ -68,8 +68,8 @@ export default function CollapsibleSidebar({
         return <Globe {...iconProps} />;
       case "History":
         return <History {...iconProps} />;
-      // case "ShoppingBag":
-      //   return <ShoppingBag {...iconProps} />;
+      case "ShoppingBag":
+        return <ShoppingBag {...iconProps} />;
       case "Truck":
         return <Truck {...iconProps} />;
       default:
@@ -127,6 +127,12 @@ export default function CollapsibleSidebar({
       const isAdminSafe = userRole === 'ADMIN';
       
       const baseSettings = [
+        {
+          label: "General",
+          href: "/settings/general",
+          iconName: "Settings",
+          active: pathname === "/settings/general",
+        },
         {
           label: "Marketplaces",
           href: "/settings/marketplaces",
