@@ -278,7 +278,7 @@ export default function ShippingPage() {
             <Button
               onClick={loadShippingCompanies}
               disabled={loading}
-              varient="outline"
+              variant="outline"
               size="sm"
               title="Refresh shipping companies"
             >
