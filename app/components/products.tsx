@@ -3002,7 +3002,7 @@ const Products = () => {
                               required={index === 0}
                             />
                           </div>
-                          <div className="w-40 flex items-center gap-1">
+                          {/* <div className="w-40 flex items-center gap-1">
                             <Button
                               type="button"
                               onClick={() => {
@@ -3034,7 +3034,7 @@ const Products = () => {
                             >
                               <Plus className="w-3 h-3" />
                             </Button>
-                          </div>
+                          </div> */}
                           <div className="w-24 flex gap-2">
                             {index === subSkus.length - 1 && (
                               <Button
@@ -3087,7 +3087,7 @@ const Products = () => {
                     />
                   </div>
                   
-                  <div>
+                  {/* <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                       Ship Types
                     </label>
@@ -3098,7 +3098,7 @@ const Products = () => {
                       className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
                       placeholder="e.g. Standard Shipping, White Glove"
                     />
-                  </div>
+                  </div> */}
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
