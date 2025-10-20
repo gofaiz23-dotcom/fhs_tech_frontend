@@ -88,13 +88,19 @@ const Listings = () => {
   const getProxiedImageUrl = (imageUrl: string | null | undefined): string | null => {
     if (!imageUrl) return null
     
+    // Normalize the IP address to current backend IP
+    let normalizedUrl = imageUrl
+    if (imageUrl.includes('192.168.0.22:5000')) {
+      normalizedUrl = imageUrl.replace('192.168.0.22:5000', '192.168.0.22:5000')
+    }
+    
     // If it's a backend URL, proxy it
-    if (imageUrl.startsWith('http://192.168.0.23:5000/uploads/')) {
-      return `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`
+    if (normalizedUrl.startsWith('http://192.168.0.22:5000/uploads/')) {
+      return `/api/image-proxy?url=${encodeURIComponent(normalizedUrl)}`
     }
     
     // Otherwise return as-is (for external URLs)
-    return imageUrl
+    return normalizedUrl
   }
   
   // Helper function to safely format prices
@@ -265,7 +271,7 @@ const Listings = () => {
   // Load brands
   const loadBrands = async () => {
     try {
-      const response = await fetch('https://192.168.0.23:5000/api/brands', {
+      const response = await fetch('http://192.168.0.22:5000/api/brands', {
         headers: {
           'Authorization': `Bearer ${state.accessToken}`
         }
@@ -303,7 +309,7 @@ const Listings = () => {
       if (filters.minPrice) params.append('minPrice', filters.minPrice)
       if (filters.maxPrice) params.append('maxPrice', filters.maxPrice)
       
-      const url = `https://192.168.0.23:5000/api/listings?${params}`
+      const url = `http://192.168.0.22:5000/api/listings?${params}`
       console.log('📡 Loading listings from:', url)
       
       const response = await fetch(url, {
@@ -949,7 +955,7 @@ const Listings = () => {
           }
         })
         
-        response = await fetch('https://192.168.0.23:5000/api/listings', {
+        response = await fetch('http://192.168.0.22:5000/api/listings', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${state.accessToken}`
@@ -982,7 +988,7 @@ const Listings = () => {
           attributes: attributesPayload
         }
         
-        response = await fetch('https://192.168.0.23:5000/api/listings', {
+        response = await fetch('http://192.168.0.22:5000/api/listings', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${state.accessToken}`,
@@ -1108,7 +1114,7 @@ const Listings = () => {
         attributes: attributesPayload
       }
       
-      const response = await fetch(`https://192.168.0.23:5000/api/listings/${selectedListing.id}`, {
+      const response = await fetch(`http://192.168.0.22:5000/api/listings/${selectedListing.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -1146,7 +1152,7 @@ const Listings = () => {
       setIsDeleting(true)
       setError(null)
       
-      const response = await fetch(`https://192.168.0.23:5000/api/listings/${selectedListing.id}`, {
+      const response = await fetch(`http://192.168.0.22:5000/api/listings/${selectedListing.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`

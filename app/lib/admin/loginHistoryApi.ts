@@ -4,7 +4,7 @@
  * This service handles all login history and user analytics API calls.
  * All endpoints require admin authentication with Bearer token.
  * 
- * API Base URL: https://fhs-tech-backend.onrender.com/api
+ * API Base URL: http://192.168.0.22:5000/api
  * 
  * Available Endpoints:
  * - GET /api/admin/users - Get all users with login statistics
@@ -16,7 +16,7 @@
 // Base API configuration
 // API Server: https://fhs-tech-backend.onrender.com
 // Base Path: /api
-const API_BASE_URL = 'http://192.168.0.23:5000/api';
+const API_BASE_URL = 'http://192.168.0.22:5000/api';
 
 /**
  * Custom error class for login history API-specific errors

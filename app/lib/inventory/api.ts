@@ -166,7 +166,7 @@ export class InventoryService {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('https://fhs-tech-backend.onrender.com/api/inventory/bulk/inventory/updates', {
+      const response = await fetch('http://192.168.0.22:5000/api/inventory/bulk/inventory/updates', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,

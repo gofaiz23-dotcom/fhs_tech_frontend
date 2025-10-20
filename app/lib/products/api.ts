@@ -151,7 +151,7 @@ export class ProductsService {
       const response = await HttpClient.get<{ categories: string[] }>('/products/categories', {}, accessToken);
       return response.categories || [];
     } catch (error) {
-      console.warn('Categories endpoint not available, using fallback data');
+      // Silently use fallback data - endpoint doesn't exist on backend yet
       // Return fallback categories if endpoint doesn't exist
       return ['Furniture', 'Electronics', 'Clothing', 'Home & Garden', 'Sports', 'Books'];
     }
@@ -165,7 +165,7 @@ export class ProductsService {
       const response = await HttpClient.get<{ brands: Brand[] }>('/products/brands', {}, accessToken);
       return response.brands || [];
     } catch (error) {
-      console.warn('Brands endpoint not available, using fallback data');
+      // Silently use fallback data - endpoint doesn't exist on backend yet
       // Return fallback brands if endpoint doesn't exist
       return [
         { id: 1, name: 'Furniture of America', description: 'Life changing and home altering furniture.' },
@@ -183,7 +183,7 @@ export class ProductsService {
       const response = await HttpClient.get<{ groupSkus: string[] }>('/products/group-skus', {}, accessToken);
       return response.groupSkus || [];
     } catch (error) {
-      console.warn('Group SKUs endpoint not available, using fallback data');
+      // Silently use fallback data - endpoint doesn't exist on backend yet
       return ['AM-BK300MH-4', 'AM-BK304MH-BED', 'AM-SL109-T', 'AM-BK300MH-1'];
     }
   }
@@ -196,7 +196,7 @@ export class ProductsService {
       const response = await HttpClient.get<{ subSkus: string[] }>('/products/sub-skus', {}, accessToken);
       return response.subSkus || [];
     } catch (error) {
-      console.warn('Sub SKUs endpoint not available, using fallback data');
+      // Silently use fallback data - endpoint doesn't exist on backend yet
       return ['AM-BK300MH-4', 'AM-BK304MH-1', 'AM-BK304MH-2', 'AM-BK304MH-3', 'AM-BK304MH-4', 'AM-BK304MH-5'];
     }
   }
@@ -209,7 +209,7 @@ export class ProductsService {
       const response = await HttpClient.get<{ collections: string[] }>('/products/collections', {}, accessToken);
       return response.collections || [];
     } catch (error) {
-      console.warn('Collections endpoint not available, using fallback data');
+      // Silently use fallback data - endpoint doesn't exist on backend yet
       return ['Melitta', 'Marinos', 'Classic', 'Modern', 'Contemporary'];
     }
   }
@@ -222,7 +222,7 @@ export class ProductsService {
       const response = await HttpClient.get<{ shipTypes: string[] }>('/products/ship-types', {}, accessToken);
       return response.shipTypes || [];
     } catch (error) {
-      console.warn('Ship types endpoint not available, using fallback data');
+      // Silently use fallback data - endpoint doesn't exist on backend yet
       return ['Standard', 'Express', 'Overnight', 'Ground'];
     }
   }
@@ -235,7 +235,7 @@ export class ProductsService {
       const response = await HttpClient.get<{ singleSetItems: string[] }>('/products/single-set-items', {}, accessToken);
       return response.singleSetItems || [];
     } catch (error) {
-      console.warn('Single set items endpoint not available, using fallback data');
+      // Silently use fallback data - endpoint doesn't exist on backend yet
       return ['Single Item', 'Part', 'Set', 'Bundle'];
     }
   }

@@ -19,7 +19,7 @@ import {
   SUPPORTED_FILE_TYPES
 } from './types';
 
-const BASE_URL = 'http://192.168.0.23:5000/api';
+const BASE_URL = 'http://192.168.0.22:5000/api';
 
 /**
  * Shipping Companies API Service Class

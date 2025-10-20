@@ -39,13 +39,19 @@ const Products = () => {
   const getProxiedImageUrl = (imageUrl: string | null | undefined): string | null => {
     if (!imageUrl) return null
     
+    // Normalize the IP address to current backend IP
+    let normalizedUrl = imageUrl
+    if (imageUrl.includes('192.168.0.22:5000')) {
+      normalizedUrl = imageUrl.replace('192.168.0.22:5000', '192.168.0.22:5000')
+    }
+    
     // If it's a backend URL, proxy it
-    if (imageUrl.startsWith('http://192.168.0.23:5000/uploads/')) {
-      return `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`
+    if (normalizedUrl.startsWith('http://192.168.0.22:5000/uploads/')) {
+      return `/api/image-proxy?url=${encodeURIComponent(normalizedUrl)}`
     }
     
     // Otherwise return as-is (for external URLs)
-    return imageUrl
+    return normalizedUrl
   }
   
   // State management
@@ -897,7 +903,7 @@ const Products = () => {
       const finalPayload = payload.length === 1 ? payload[0] : { listings: payload }
       
       // Send to API
-      const response = await fetch('https://192.168.0.23:5000/api/listings', {
+      const response = await fetch('http://192.168.0.22:5000/api/listings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1190,10 +1196,10 @@ const Products = () => {
           }
         })
         console.log('🌐 Content-Type: multipart/form-data (set automatically by browser)')
-        console.log('🚀 About to send FormData request to: https://192.168.0.23:5000/api/products')
+        console.log('🚀 About to send FormData request to: http://192.168.0.22:5000/api/products')
         
         try {
-          response = await fetch('https://192.168.0.23:5000/api/products', {
+          response = await fetch('http://192.168.0.22:5000/api/products', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${state.accessToken}`,
@@ -1237,7 +1243,7 @@ const Products = () => {
         console.log(`Gallery URLs: ${filteredGalleryImages.length}`)
         console.log('Backend will download these URLs')
         
-        response = await fetch('https://192.168.0.23:5000/api/products', {
+        response = await fetch('http://192.168.0.22:5000/api/products', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -1426,7 +1432,7 @@ const Products = () => {
             attributes: product.attributes
           }
           
-          const response = await fetch('https://192.168.0.23:5000/api/products', {
+          const response = await fetch('http://192.168.0.22:5000/api/products', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${state.accessToken}`,
@@ -1482,7 +1488,7 @@ const Products = () => {
       
       console.log('📁 Importing file:', importFile.name)
       
-      const response = await fetch('https://192.168.0.23:5000/api/products/import', {
+      const response = await fetch('http://192.168.0.22:5000/api/products/import', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -1646,7 +1652,7 @@ const Products = () => {
     
     try {
       // Call API to create new brand
-      const response = await fetch('https://192.168.0.23:5000/api/brands', {
+      const response = await fetch('http://192.168.0.22:5000/api/brands', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1869,7 +1875,7 @@ const Products = () => {
       console.log('==============================')
       
       // Make PUT request to update
-      const response = await fetch(`https://192.168.0.23:5000/api/products/${selectedProduct.id}`, {
+      const response = await fetch(`http://192.168.0.22:5000/api/products/${selectedProduct.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -1927,7 +1933,7 @@ const Products = () => {
       setIsDeleting(true)
       setError(null)
       
-      const response = await fetch(`https://192.168.0.23:5000/api/products/${selectedProduct.id}`, {
+      const response = await fetch(`http://192.168.0.22:5000/api/products/${selectedProduct.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,

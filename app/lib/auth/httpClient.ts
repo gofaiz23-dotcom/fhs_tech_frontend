@@ -9,7 +9,7 @@
 import { AuthApiError } from './api';
 
 // Base API configuration
-const API_BASE_URL = 'http://192.168.0.23:5000/api';
+const API_BASE_URL = 'http://192.168.0.22:5000/api';
 
 /**
  * HTTP Client with automatic cookie-based authentication
@@ -125,13 +125,26 @@ export class HttpClient {
         const errorMessage = error?.error || error?.message || `HTTP error: ${response.statusText}` || 'Unknown error';
         const errorCode = error?.code?.toString() || response.status.toString();
         
-        console.error('❌ API Error Response:', {
-          status: response.status,
-          statusText: response.statusText,
-          errorMessage,
-          errorCode,
-          fullError: error
-        });
+        // Suppress error logging for expected 404s on endpoints that don't exist yet
+        const isExpected404 = response.status === 404 && (
+          endpoint.includes('/products/categories') ||
+          endpoint.includes('/products/brands') ||
+          endpoint.includes('/products/group-skus') ||
+          endpoint.includes('/products/sub-skus') ||
+          endpoint.includes('/products/collections') ||
+          endpoint.includes('/products/ship-types') ||
+          endpoint.includes('/products/single-set-items')
+        );
+        
+        if (!isExpected404) {
+          console.error('❌ API Error Response:', {
+            status: response.status,
+            statusText: response.statusText,
+            errorMessage,
+            errorCode,
+            fullError: error
+          });
+        }
         
         throw new AuthApiError(errorMessage, response.status, errorCode);
       }

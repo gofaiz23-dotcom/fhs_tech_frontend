@@ -5,7 +5,8 @@
  * The backend manages refresh tokens automatically via HttpOnly cookies.
  * 
  * Features:
- * - HttpOnly cookie-based authentication
+ * - HttpOnly cookie-based aut
+ * hentication
  * - Automatic refresh token handling by backend
  * - Network type detection for login tracking
  * - Comprehensive error handling
@@ -26,7 +27,7 @@ import { HttpClient } from './httpClient';
 
 // Base API configuration
 // const API_BASE_URL = 'https://fhs-tech-backend.onrender.com/api';
-const API_BASE_URL = 'http://192.168.0.23:5000/api';
+const API_BASE_URL = 'http://192.168.0.22:5000/api';
 const AUTH_ENDPOINTS = {
   LOGIN: `${API_BASE_URL}/auth/login`,
   REGISTER: `${API_BASE_URL}/auth/register`,
