@@ -19,6 +19,7 @@ import {
   ShoppingBag,
   Truck,
   X,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { useTheme } from "next-themes";
@@ -72,6 +73,8 @@ export default function CollapsibleSidebar({
         return <ShoppingBag {...iconProps} />;
       case "Truck":
         return <Truck {...iconProps} />;
+      case "Activity":
+        return <Activity {...iconProps} />;
       default:
         return <Home {...iconProps} />;
     }
@@ -107,6 +110,12 @@ export default function CollapsibleSidebar({
         iconName: "ShoppingCart",
         active: pathname === "/orders",
       },
+      {
+        label: "Status",
+        href: "/status",
+        iconName: "Activity",
+        active: pathname === "/status",
+      },
     ],
     [pathname]
   );
@@ -128,7 +137,7 @@ export default function CollapsibleSidebar({
       
       const baseSettings = [
         {
-          label: "General",
+          label: "Settings",
           href: "/settings/general",
           iconName: "Settings",
           active: pathname === "/settings/general",

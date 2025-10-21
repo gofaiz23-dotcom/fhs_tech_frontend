@@ -18,11 +18,12 @@
  * - Preview uses blob URLs (not base64) for better performance
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Search, Download, Plus, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Image as ImageIcon, Images, Building2, Package2, Filter, Maximize2, Minimize2, Upload, Edit, Trash2, Minus } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { ProductsService, type Product, type ProductsFilters, type Brand, type ProductAttributes } from '../lib/products/api'
 import { BrandsService } from '../lib/brands/api'
+import { useToast } from '../lib/hooks/use-toast'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
@@ -35,6 +36,7 @@ import './table-scroll.css'
 
 const Products = () => {
   const { state } = useAuth()
+  const { toast } = useToast()
   
   // Helper function to proxy backend images through Next.js API
   const getProxiedImageUrl = (imageUrl: string | null | undefined): string | null => {
@@ -164,9 +166,12 @@ const Products = () => {
   // Bulk and import modals state
   const [showBulkModal, setShowBulkModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
+  const [showBulkImagesModal, setShowBulkImagesModal] = useState(false)
   const [bulkProducts, setBulkProducts] = useState<Array<any>>([])
   const [importFile, setImportFile] = useState<File | null>(null)
+  const [bulkImagesFile, setBulkImagesFile] = useState<File | null>(null)
   const [bulkResults, setBulkResults] = useState<any>(null)
+  const [bulkImagesResults, setBulkImagesResults] = useState<any>(null)
   
   // Bulk forms management
   const [bulkForms, setBulkForms] = useState<Array<{
@@ -185,6 +190,9 @@ const Products = () => {
   const [isSubmittingListings, setIsSubmittingListings] = useState(false)
   const [combinationSuggestions, setCombinationSuggestions] = useState<Array<any>>([])
   const [selectedCombination, setSelectedCombination] = useState<number | null>(null)
+  const buttonClickCooldown = useRef<Set<string>>(new Set())
+  const lastClickTimestamp = useRef<Map<string, number>>(new Map())
+  const executingRef = useRef<Set<string>>(new Set()) // Track currently executing operations
   
   // Drag and scroll functionality with smooth momentum
   const tableRef = useRef<HTMLDivElement>(null)
@@ -533,7 +541,11 @@ const Products = () => {
   // Export to CSV
   const handleExport = () => {
     if (products.length === 0) {
-      alert('No products to export')
+      toast({
+        variant: "destructive",
+        title: "No Data",
+        description: "No products to export",
+      })
       return
     }
     
@@ -768,6 +780,60 @@ const Products = () => {
   const handleImportProducts = () => {
     setShowImportModal(true)
     document.body.classList.add('modal-open')
+  }
+  
+  // Bulk images handler
+  const handleBulkImages = () => {
+    setShowBulkImagesModal(true)
+    document.body.classList.add('modal-open')
+  }
+  
+  // Download image template
+  const handleDownloadImageTemplate = async () => {
+    try {
+      setIsSubmitting(true)
+      await ProductsService.downloadImageTemplate(state.accessToken || '')
+      // Success - file will be downloaded automatically
+    } catch (error) {
+      console.error('Failed to download image template:', error)
+      toast({
+        variant: "destructive",
+        title: "Download Failed",
+        description: "Failed to download image template. Please try again.",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+  
+  // Upload bulk images
+  const handleBulkImagesUpload = async () => {
+    if (!bulkImagesFile) {
+      toast({
+        variant: "destructive",
+        title: "No File Selected",
+        description: "Please select a file to upload",
+      })
+      return
+    }
+    
+    try {
+      setIsSubmitting(true)
+      const result = await ProductsService.bulkUploadImages(state.accessToken || '', bulkImagesFile)
+      setBulkImagesResults(result)
+      
+      // Refresh products list
+      await loadProducts()
+    } catch (error) {
+      console.error('Failed to upload bulk images:', error)
+      toast({
+        variant: "destructive",
+        title: "Upload Failed",
+        description: "Failed to upload bulk images. Please try again.",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
   
   // Generate combination suggestions
@@ -1032,13 +1098,98 @@ const Products = () => {
     })
   }
   
-  // Increment/Decrement sub SKU quantity
-  const handleSubSkuQuantityChange = (listingIndex: number, subSkuIndex: number, delta: number) => {
+  // Update Sub SKU field
+  const updateSubSkuField = (listingIndex: number, subSkuIndex: number, field: string, value: any) => {
     setListingsData(prev => {
       const newData = [...prev]
-      const currentQty = newData[listingIndex].subSkus[subSkuIndex].quantity
-      const newQty = Math.max(0, currentQty + delta)
-      newData[listingIndex].subSkus[subSkuIndex].quantity = newQty
+      newData[listingIndex].subSkus[subSkuIndex][field] = value
+      return newData
+    })
+  }
+  
+  
+  // Add custom Sub SKU (blank field) - exactly one
+  const handleAddCustomSubSku = (listingIndex: number) => {
+    const buttonKey = `add-custom-${listingIndex}`
+    
+    // Prevent double-clicks with cooldown
+    if (buttonClickCooldown.current.has(buttonKey)) return
+    
+    // Add to cooldown
+    buttonClickCooldown.current.add(buttonKey)
+    
+    setListingsData(prev => {
+      const newData = [...prev]
+      // Add exactly one new custom sub SKU
+      newData[listingIndex].subSkus.push({
+        sku: '',
+        quantity: 1,
+        isCustom: true
+      })
+      return newData
+    })
+    
+    // Remove from cooldown after 500ms
+    setTimeout(() => {
+      buttonClickCooldown.current.delete(buttonKey)
+    }, 500)
+  }
+  
+  // Add duplicate Sub SKU - exactly one more instance
+  const handleAddDuplicateSubSku = (listingIndex: number, sku: string) => {
+    const buttonKey = `add-duplicate-${listingIndex}-${sku}`
+    const now = Date.now()
+    
+    // Triple protection: Check execution, cooldown, AND timestamp
+    const lastClick = lastClickTimestamp.current.get(buttonKey) || 0
+    if (executingRef.current.has(buttonKey) || buttonClickCooldown.current.has(buttonKey) || (now - lastClick < 300)) {
+      console.log('BLOCKED: Cooldown active for', buttonKey, 'Time since last:', now - lastClick, 'Executing:', executingRef.current.has(buttonKey))
+      return
+    }
+    
+    // Mark as executing
+    executingRef.current.add(buttonKey)
+    
+    // Add to both cooldown mechanisms
+    buttonClickCooldown.current.add(buttonKey)
+    lastClickTimestamp.current.set(buttonKey, now)
+    console.log('EXECUTING: Adding one duplicate for SKU:', sku, 'Button key:', buttonKey)
+    
+    setListingsData(prev => {
+      const newData = [...prev]
+      // Find the first instance of this SKU to copy its properties
+      const firstInstance = newData[listingIndex].subSkus.find((s: any) => s.sku === sku)
+      if (firstInstance) {
+        console.log('PUSHING: Found first instance, adding exactly ONE duplicate')
+        newData[listingIndex].subSkus.push({
+          sku: firstInstance.sku,
+          quantity: firstInstance.quantity || 1,
+          isCustom: firstInstance.isCustom
+        })
+        console.log('NEW COUNT:', newData[listingIndex].subSkus.filter((s: any) => s.sku === sku).length)
+      }
+      return newData
+    })
+    
+    // Clear executing flag immediately after state update is queued
+    executingRef.current.delete(buttonKey)
+    
+    // Remove from cooldown after 500ms
+    setTimeout(() => {
+      buttonClickCooldown.current.delete(buttonKey)
+      console.log('COOLDOWN CLEARED for', buttonKey)
+    }, 500)
+  }
+  
+  // Remove Sub SKU (only custom ones can be removed)
+  const handleRemoveSubSku = (listingIndex: number, subSkuIndex: number) => {
+    setListingsData(prev => {
+      const newData = [...prev]
+      const subSku = newData[listingIndex].subSkus[subSkuIndex]
+      // Only allow removal of custom sub SKUs (check if isCustom exists and is true)
+      if (subSku && subSku.isCustom === true) {
+        newData[listingIndex].subSkus.splice(subSkuIndex, 1)
+      }
       return newData
     })
   }
@@ -1103,7 +1254,11 @@ const Products = () => {
       const result = await response.json()
       
       // Show success message
-      alert(`Successfully created ${payload.length} listing(s)!`)
+      toast({
+        variant: "success",
+        title: "Listings Created",
+        description: `Successfully created ${payload.length} listing(s)!`,
+      })
       
       // Close modal and clear selection
       handleCloseListings()
@@ -1564,6 +1719,14 @@ const Products = () => {
     document.body.classList.remove('modal-open')
   }
   
+  // Close bulk images modal
+  const handleCloseBulkImagesModal = () => {
+    setShowBulkImagesModal(false)
+    setBulkImagesFile(null)
+    setBulkImagesResults(null)
+    document.body.classList.remove('modal-open')
+  }
+  
   // Add product to bulk list
   const addBulkProduct = () => {
     if (productFormData.title.trim() && productFormData.groupSku.trim() && productFormData.subSku.trim()) {
@@ -1893,7 +2056,11 @@ const Products = () => {
       setError(null)
       
       // Show success message
-      alert(`Brand "${newBrandName}" created successfully!`)
+      toast({
+        variant: "success",
+        title: "Brand Created",
+        description: `Brand "${newBrandName}" created successfully!`,
+      })
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to add new brand'
       setError(errorMessage)
@@ -2429,6 +2596,7 @@ const Products = () => {
                 onAddProduct={handleAddProduct}
                 onBulkAddProduct={handleBulkAddProducts}
                 onImportProduct={handleImportProducts}
+                onBulkImagesProduct={handleBulkImages}
               />
             </div>
           </div>
@@ -5533,6 +5701,155 @@ const Products = () => {
         </div>
       )}
       
+      {/* Bulk Images Modal */}
+      {showBulkImagesModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 w-full max-w-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-semibold text-gray-900 dark:text-slate-100">
+                Bulk Upload Product Images
+              </h3>
+              <Button
+                onClick={handleCloseBulkImagesModal}
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            {/* File Requirements */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">File Requirements</h4>
+                  <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                    <li>• <strong>Supported formats:</strong> CSV, Excel (.xls, .xlsx), JSON</li>
+                    <li>• <strong>File size limit:</strong> Unlimited (background processing)</li>
+                    <li>• <strong>Required columns:</strong> groupSku, subSku, mainImageUrl, galleryImages</li>
+                    <li>• <strong>Gallery images:</strong> Comma-separated URLs</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Template Download */}
+            <div className="mb-4">
+              <Button
+                onClick={handleDownloadImageTemplate}
+                variant="outline"
+                size="sm"
+                className="text-indigo-600 hover:text-indigo-700"
+                disabled={isSubmitting}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download Template
+              </Button>
+            </div>
+
+            {/* File Upload */}
+            <div className="border-2 border-dashed dark:border-slate-600 rounded-lg p-6 text-center">
+              <input
+                type="file"
+                accept=".csv,.xls,.xlsx,.json"
+                onChange={(e) => setBulkImagesFile(e.target.files?.[0] || null)}
+                className="hidden"
+                id="bulk-images-file-upload"
+              />
+              <label
+                htmlFor="bulk-images-file-upload"
+                className="cursor-pointer flex flex-col items-center gap-2"
+              >
+                <Upload className="h-8 w-8 text-gray-400" />
+                <span className="text-gray-600 dark:text-slate-400">
+                  {bulkImagesFile ? bulkImagesFile.name : 'Click to select file or drag and drop'}
+                </span>
+                <span className="text-sm text-gray-500 dark:text-slate-500">
+                  CSV, Excel, JSON files
+                </span>
+              </label>
+            </div>
+
+            <div className="flex gap-2 justify-end mt-6">
+              <Button
+                onClick={handleCloseBulkImagesModal}
+                variant="outline"
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleBulkImagesUpload}
+                disabled={isSubmitting || !bulkImagesFile}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                {isSubmitting ? 'Uploading...' : 'Upload Images'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Bulk Images Results Modal */}
+      {bulkImagesResults && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
+                Bulk Images Upload Results
+              </h3>
+              <Button
+                onClick={() => setBulkImagesResults(null)}
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            {/* Summary */}
+            <div className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-4 mb-4">
+              <h4 className="font-medium text-gray-900 dark:text-slate-100 mb-2">Summary</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600 dark:text-slate-400">Total:</span>
+                  <span className="ml-1 font-medium">{bulkImagesResults.summary.totalProcessed}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600 dark:text-slate-400">Successful:</span>
+                  <span className="ml-1 font-medium text-green-600">{bulkImagesResults.summary.successful}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600 dark:text-slate-400">Failed:</span>
+                  <span className="ml-1 font-medium text-red-600">{bulkImagesResults.summary.failed}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600 dark:text-slate-400">Skipped:</span>
+                  <span className="ml-1 font-medium text-yellow-600">{bulkImagesResults.summary.skipped}</span>
+                </div>
+              </div>
+              {bulkImagesResults.jobId && (
+                <div className="mt-2 text-sm text-gray-600 dark:text-slate-400">
+                  <span className="font-medium">Job ID:</span> {bulkImagesResults.jobId}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={() => setBulkImagesResults(null)}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Bulk Results Modal */}
       {bulkResults && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
@@ -5931,20 +6248,50 @@ const Products = () => {
                 <div key={listingIndex} className="border dark:border-slate-700 rounded-lg p-6 space-y-6">
                   {/* Product Header */}
                   <div className="flex items-start gap-4 pb-4 border-b dark:border-slate-700">
-                    {listing.mainImageUrl && (
+                    <div className="relative">
+                      {listing.mainImageUrl ? (
+                        <div className="relative group">
                       <img 
-                        src={listing.mainImageUrl} 
+                            src={getProxiedImageUrl(listing.mainImageUrl) || listing.mainImageUrl} 
                         alt={listing.title}
-                        className="w-24 h-24 object-cover rounded-lg"
-                      />
-                    )}
+                            className="w-24 h-24 object-cover rounded-lg border border-gray-200 dark:border-slate-600"
+                            onError={(e) => {
+                              e.currentTarget.src = '/placeholder-image.png'
+                            }}
+                          />
+                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity rounded-lg flex items-center justify-center">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 hover:bg-white text-gray-900"
+                              onClick={() => {
+                                setPreviewImageUrl(getProxiedImageUrl(listing.mainImageUrl) || listing.mainImageUrl)
+                                setPreviewImageTitle(listing.title)
+                                setShowImagePreview(true)
+                              }}
+                            >
+                              <Maximize2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-24 h-24 bg-gray-100 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 flex items-center justify-center">
+                          <ImageIcon className="h-8 w-8 text-gray-400" />
+                        </div>
+                      )}
+                    </div>
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
                         Product {listingIndex + 1}
                       </h3>
-                      <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                      <p className="text-sm text-gray-600 dark:text-slate-400 mt-1 line-clamp-2">
                         {listing.title}
                       </p>
+                      {listing.mainImageUrl && (
+                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                          Click image to preview
+                        </p>
+                      )}
                     </div>
                   </div>
                   
@@ -5953,24 +6300,37 @@ const Products = () => {
                     {/* Custom SKU Prefix */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                        Custom SKU Prefix (Optional)
+                        Custom SKU Prefix <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="text"
                         value={listing.customSku}
-                        onChange={(e) => updateListingData(listingIndex, 'customSku', e.target.value)}
-                        placeholder="Enter prefix"
+                        onChange={(e) => {
+                          const value = e.target.value
+                          // Validation: Only A-Z, 0-9, and dash allowed
+                          const validPattern = /^[A-Z0-9-]*$/
+                          if (validPattern.test(value)) {
+                            updateListingData(listingIndex, 'customSku', value)
+                          }
+                        }}
+                        placeholder="Enter prefix (A-Z, 0-9, - only)"
                         className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
                       />
                       <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                        Add a custom prefix to the Group SKU
+                        Only capital letters (A-Z), numbers (0-9), and dash (-) allowed. At least one dash (-) required.
                       </p>
+                      {listing.customSku && (
+                        <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                          Final SKU: {listing.customSku}{listing.Sku}
+                        </p>
+                      )}
                     </div>
                     
                     {/* Group SKU */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                        Group SKU
+                        Group SKU <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="text"
@@ -5978,6 +6338,7 @@ const Products = () => {
                         onChange={(e) => updateListingData(listingIndex, 'Sku', e.target.value)}
                         placeholder="Group SKU"
                         className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
                       />
                       <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                         {listing.originalGroupSku ? (
@@ -5988,94 +6349,168 @@ const Products = () => {
                           'Enter or extend the Group SKU'
                         )}
                       </p>
-                      {listing.customSku && (
-                        <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                          Final SKU: {listing.customSku}{listing.Sku}
-                        </p>
-                      )}
+                      
                     </div>
                   </div>
                   
-                  {/* Sub SKUs with Increment/Decrement */}
-                  {listing.subSkus && listing.subSkus.length > 0 && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">
-                        Sub SKUs (Select quantities)
-                      </label>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {listing.subSkus.map((subSku: any, subSkuIndex: number) => (
-                          <div key={subSkuIndex} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
-                            <div className="flex-1">
-                              <p className="text-sm font-medium text-gray-900 dark:text-slate-100">
-                                {subSku.sku}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSubSkuQuantityChange(listingIndex, subSkuIndex, -1)}
-                                className="h-8 w-8 p-0"
-                                disabled={subSku.quantity === 0}
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              <span className="w-12 text-center font-medium text-gray-900 dark:text-slate-100">
-                                {subSku.quantity}
-                              </span>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSubSkuQuantityChange(listingIndex, subSkuIndex, 1)}
-                                className="h-8 w-8 p-0"
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
+                   {/* Sub SKUs - Complete Rewrite */}
+                    {listing.subSkus && listing.subSkus.length > 0 && (
+                      <div>
+                       <div className="flex items-center justify-between mb-3">
+                         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">
+                           Sub SKUs <span className="text-red-500">*</span>
+                         </label>
+                         <Button
+                           type="button"
+                           size="sm"
+                           variant="outline"
+                           onClick={() => {
+                             setListingsData(prev => {
+                               const newData = [...prev]
+                               newData[listingIndex].subSkus.push({
+                                 sku: '',
+                                 quantity: 1,
+                                 isCustom: true
+                               })
+                               return newData
+                             })
+                           }}
+                           className="flex items-center gap-1"
+                         >
+                           <Plus className="h-3 w-3" />
+                           Add Sub SKU
+                         </Button>
+                       </div>
+                       <div className="space-y-3">
+                         {(() => {
+                           // Create groups of identical SKUs
+                           const skuGroups = new Map()
+                           listing.subSkus.forEach((subSku: any, index: number) => {
+                             if (!skuGroups.has(subSku.sku)) {
+                               skuGroups.set(subSku.sku, {
+                                 sku: subSku.sku,
+                                 count: 0,
+                                 isCustom: subSku.isCustom,
+                                 indices: []
+                               })
+                             }
+                             const group = skuGroups.get(subSku.sku)
+                             group.count++
+                             group.indices.push(index)
+                           })
+                           
+                          return Array.from(skuGroups.values()).map((group: any, groupIndex: number) => (
+                            <div key={`${listingIndex}-${group.sku}-${groupIndex}`} className="flex items-center gap-2">
+                              <div className="flex-1 relative">
+                                <Input
+                                  type="text"
+                                  value={Array(group.count).fill(group.sku).join(', ')}
+                                  onChange={(e) => {
+                                    const newValue = e.target.value.trim()
+                                    setListingsData(prev => {
+                                      const newData = [...prev]
+                                      group.indices.forEach((idx: number) => {
+                                        newData[listingIndex].subSkus[idx].sku = newValue
+                                      })
+                                      return newData
+                                    })
+                                  }}
+                                  placeholder={`Sub SKU ${groupIndex + 1}`}
+                                  className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 pr-28"
+                                  required
+                                />
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-1 rounded text-xs font-semibold">
+                                   Count: {group.count}
+                                </div>
+                              </div>
+                               <Button
+                                 type="button"
+                                 size="sm"
+                                 variant="outline"
+                                 onClick={(e) => {
+                                   e.preventDefault()
+                                   e.stopPropagation()
+                                   handleAddDuplicateSubSku(listingIndex, group.sku)
+                                 }}
+                                 className="h-10 w-10 p-0"
+                                 title="Add one more instance"
+                               >
+                                 <Plus className="h-4 w-4" />
+                               </Button>
+                               <Button
+                                 type="button"
+                                 size="sm"
+                                 variant="outline"
+                                 onClick={(e) => {
+                                   e.preventDefault()
+                                   e.stopPropagation()
+                                   console.log('Removing one instance of SKU:', group.sku)
+                                   // Remove only one instance of this SKU
+                                   setListingsData(prev => {
+                                     const newData = [...prev]
+                                     // Find the last instance of this SKU and remove it
+                                     const lastIndex = newData[listingIndex].subSkus.map((s: any, idx: number) => 
+                                       s.sku === group.sku ? idx : -1
+                                     ).filter((idx: number) => idx !== -1).pop()
+                                     
+                                     if (lastIndex !== undefined) {
+                                       console.log('Removing instance at index:', lastIndex)
+                                       newData[listingIndex].subSkus.splice(lastIndex, 1)
+                                     }
+                                     return newData
+                                   })
+                                 }}
+                                 className="h-10 w-10 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                 title="Remove one instance"
+                               >
+                                 <X className="h-4 w-4" />
+                               </Button>
+                             </div>
+                           ))
+                         })()}
+                       </div>
+                       <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">
+                         [+] adds one more instance of the SKU, [X] removes one instance of the SKU. "Add Sub SKU" button adds a new blank SKU field.
+                       </p>
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">
-                        Only sub SKUs with quantity {'>'} 0 will be included in the listing
-                      </p>
-                    </div>
-                  )}
+                    )}
                   
                   {/* Basic Information */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                        Brand Name
+                        Brand Name <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="text"
                         value={listing.brandName}
                         onChange={(e) => updateListingData(listingIndex, 'brandName', e.target.value)}
                         className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                        Category
+                        Category <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="text"
                         value={listing.category}
                         onChange={(e) => updateListingData(listingIndex, 'category', e.target.value)}
                         className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                        Collection Name
+                        Collection Name <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="text"
                         value={listing.collectionName}
                         onChange={(e) => updateListingData(listingIndex, 'collectionName', e.target.value)}
                         className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
                       />
                     </div>
                   </div>
@@ -6083,13 +6518,29 @@ const Products = () => {
                   {/* Title */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                      Title
+                      Title <span className="text-red-500">*</span>
                     </label>
                     <Input
                       type="text"
                       value={listing.title}
                       onChange={(e) => updateListingData(listingIndex, 'title', e.target.value)}
                       className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                      required
+                    />
+                  </div>
+                  
+                  {/* Description */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                      Description <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={listing.description || ''}
+                      onChange={(e) => updateListingData(listingIndex, 'description', e.target.value)}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                      placeholder="Enter product description..."
+                      required
                     />
                   </div>
                   
@@ -6097,96 +6548,107 @@ const Products = () => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                        Brand Real Price
+                        Brand Real Price <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="number"
+                        min="0"
+                        step="0.01"
                         value={listing.brandRealPrice}
-                        onChange={(e) => updateListingData(listingIndex, 'brandRealPrice', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateListingData(listingIndex, 'brandRealPrice', Math.max(0, parseFloat(e.target.value) || 0))}
                         className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                        Brand Misc
+                        Brand Misc <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="number"
+                        min="0"
+                        step="0.01"
                         value={listing.brandMiscellaneous}
-                        onChange={(e) => updateListingData(listingIndex, 'brandMiscellaneous', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateListingData(listingIndex, 'brandMiscellaneous', Math.max(0, parseFloat(e.target.value) || 0))}
                         className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                        MSRP
+                        MSRP <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="number"
+                        min="0"
+                        step="0.01"
                         value={listing.msrp}
-                        onChange={(e) => updateListingData(listingIndex, 'msrp', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateListingData(listingIndex, 'msrp', Math.max(0, parseFloat(e.target.value) || 0))}
                         className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                        Shipping Price
+                        Shipping Price <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="number"
+                        min="0"
+                        step="0.01"
                         value={listing.shippingPrice}
-                        onChange={(e) => updateListingData(listingIndex, 'shippingPrice', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateListingData(listingIndex, 'shippingPrice', Math.max(0, parseFloat(e.target.value) || 0))}
                         className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                        Commission Price
+                        Commission Price <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="number"
+                        min="0"
+                        step="0.01"
                         value={listing.commissionPrice}
-                        onChange={(e) => updateListingData(listingIndex, 'commissionPrice', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateListingData(listingIndex, 'commissionPrice', Math.max(0, parseFloat(e.target.value) || 0))}
                         className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                        Profit Margin
+                        Profit Margin <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="number"
+                        min="0"
+                        step="0.01"
                         value={listing.profitMarginPrice}
-                        onChange={(e) => updateListingData(listingIndex, 'profitMarginPrice', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateListingData(listingIndex, 'profitMarginPrice', Math.max(0, parseFloat(e.target.value) || 0))}
                         className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                        Ecommerce Misc
+                        Ecommerce Misc <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="number"
+                        min="0"
+                        step="0.01"
                         value={listing.ecommerceMiscellaneous}
-                        onChange={(e) => updateListingData(listingIndex, 'ecommerceMiscellaneous', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateListingData(listingIndex, 'ecommerceMiscellaneous', Math.max(0, parseFloat(e.target.value) || 0))}
                         className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
                       />
                     </div>
                   </div>
                   
                   {/* Shipping & Item Info */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                        Ship Types
-                      </label>
-                      <Input
-                        type="text"
-                        value={listing.shipTypes}
-                        onChange={(e) => updateListingData(listingIndex, 'shipTypes', e.target.value)}
-                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
-                      />
-                    </div>
+                    
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                         Single/Set Item
@@ -6219,123 +6681,192 @@ const Products = () => {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                          Color
+                          Color <span className="text-red-500">*</span>
                         </label>
                         <Input
                           type="text"
                           value={listing.attributes.color}
                           onChange={(e) => updateListingData(listingIndex, 'attributes.color', e.target.value)}
                           className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                          Style
+                          Style <span className="text-red-500">*</span>
                         </label>
                         <Input
                           type="text"
                           value={listing.attributes.style}
                           onChange={(e) => updateListingData(listingIndex, 'attributes.style', e.target.value)}
                           className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                          Material
+                          Material <span className="text-red-500">*</span>
                         </label>
                         <Input
                           type="text"
                           value={listing.attributes.material}
                           onChange={(e) => updateListingData(listingIndex, 'attributes.material', e.target.value)}
                           className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                          Origin
+                          Origin <span className="text-red-500">*</span>
                         </label>
                         <Input
                           type="text"
                           value={listing.attributes.origin}
                           onChange={(e) => updateListingData(listingIndex, 'attributes.origin', e.target.value)}
                           className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                          Weight (lb)
+                          Weight (lb) <span className="text-red-500">*</span>
                         </label>
                         <Input
                           type="number"
+                          min="0"
+                          step="0.01"
                           value={listing.attributes.weight}
-                          onChange={(e) => updateListingData(listingIndex, 'attributes.weight', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => updateListingData(listingIndex, 'attributes.weight', Math.max(0, parseFloat(e.target.value) || 0))}
                           className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                          Volume (cu ft)
+                          Volume (cu ft) <span className="text-red-500">*</span>
                         </label>
                         <Input
                           type="number"
+                          min="0"
+                          step="0.01"
                           value={listing.attributes.volume}
-                          onChange={(e) => updateListingData(listingIndex, 'attributes.volume', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => updateListingData(listingIndex, 'attributes.volume', Math.max(0, parseFloat(e.target.value) || 0))}
                           className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                          Shipping Length (in)
+                          Shipping Length (in) <span className="text-red-500">*</span>
                         </label>
                         <Input
                           type="number"
+                          min="0"
+                          step="0.01"
                           value={listing.attributes.shippingLength}
-                          onChange={(e) => updateListingData(listingIndex, 'attributes.shippingLength', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => {
+                            const length = Math.max(0, parseFloat(e.target.value) || 0)
+                            updateListingData(listingIndex, 'attributes.shippingLength', length)
+                            // Auto-calculate product dimension
+                            const width = listing.attributes.shippingWidth || 0
+                            const height = listing.attributes.shippingHeight || 0
+                            if (length > 0 && width > 0 && height > 0) {
+                              const dimension = `${length}" × ${width}" × ${height}"`
+                              updateListingData(listingIndex, 'attributes.productDimension', dimension)
+                            }
+                          }}
                           className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                          Shipping Width (in)
+                          Shipping Width (in) <span className="text-red-500">*</span>
                         </label>
                         <Input
                           type="number"
+                          min="0"
+                          step="0.01"
                           value={listing.attributes.shippingWidth}
-                          onChange={(e) => updateListingData(listingIndex, 'attributes.shippingWidth', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => {
+                            const width = Math.max(0, parseFloat(e.target.value) || 0)
+                            updateListingData(listingIndex, 'attributes.shippingWidth', width)
+                            // Auto-calculate product dimension
+                            const length = listing.attributes.shippingLength || 0
+                            const height = listing.attributes.shippingHeight || 0
+                            if (length > 0 && width > 0 && height > 0) {
+                              const dimension = `${length}" × ${width}" × ${height}"`
+                              updateListingData(listingIndex, 'attributes.productDimension', dimension)
+                            }
+                          }}
                           className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                          Shipping Height (in)
+                          Shipping Height (in) <span className="text-red-500">*</span>
                         </label>
                         <Input
                           type="number"
+                          min="0"
+                          step="0.01"
                           value={listing.attributes.shippingHeight}
-                          onChange={(e) => updateListingData(listingIndex, 'attributes.shippingHeight', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => {
+                            const height = Math.max(0, parseFloat(e.target.value) || 0)
+                            updateListingData(listingIndex, 'attributes.shippingHeight', height)
+                            // Auto-calculate product dimension
+                            const length = listing.attributes.shippingLength || 0
+                            const width = listing.attributes.shippingWidth || 0
+                            if (length > 0 && width > 0 && height > 0) {
+                              const dimension = `${length}" × ${width}" × ${height}"`
+                              updateListingData(listingIndex, 'attributes.productDimension', dimension)
+                            }
+                          }}
                           className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
                         />
                       </div>
                       <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                          Product Dimension
+                          Product Dimension (Auto-calculated) <span className="text-red-500">*</span>
                         </label>
                         <Input
                           type="text"
                           value={listing.attributes.productDimension}
                           onChange={(e) => updateListingData(listingIndex, 'attributes.productDimension', e.target.value)}
                           className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          placeholder="Will auto-calculate when length, width, and height are filled"
+                          required
                         />
+                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                          Auto-calculated from length × width × height above
+                        </p>
                       </div>
                       <div className="md:col-span-3">
                         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                          Short Description
+                          Short Description <span className="text-red-500">*</span>
                         </label>
                         <Input
                           type="text"
                           value={listing.attributes.shortDescription}
                           onChange={(e) => updateListingData(listingIndex, 'attributes.shortDescription', e.target.value)}
                           className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
+                          placeholder="Enter a brief description"
+                        />
+                      </div>
+                      <div className="md:col-span-3">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                          Full Description <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                          value={listing.attributes.fullDescription || ''}
+                          onChange={(e) => updateListingData(listingIndex, 'attributes.fullDescription', e.target.value)}
+                          rows={4}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                          placeholder="Enter detailed product description..."
+                          required
                         />
                       </div>
                     </div>

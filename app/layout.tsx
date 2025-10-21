@@ -6,6 +6,7 @@ import { WarehouseProvider } from "./components/warehouses/WarehouseProvider";
 import { AuthProvider } from "./lib/auth/context";
 import { SidebarProvider } from "./components/SidebarContext";
 import { ThemeProvider } from "./components/theme-provider";
+import { Toaster } from "./components/ui/toaster";
 // import '../styles/globals.css';
 
 
@@ -47,6 +48,7 @@ export default function RootLayout({
               </WarehouseProvider>
             </SidebarProvider>
           </AuthProvider>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

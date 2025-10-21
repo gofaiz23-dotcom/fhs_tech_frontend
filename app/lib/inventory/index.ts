@@ -9,10 +9,8 @@ export { InventoryService } from './api';
 
 // TypeScript types and interfaces
 export type {
-  Brand,
   Listing,
   InventoryItem,
-  Pagination,
   InventoryResponse,
   UpdateInventoryRequest,
   BulkUpdateInventoryRequest,
