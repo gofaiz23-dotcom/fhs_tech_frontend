@@ -131,25 +131,11 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
 
   // Clear all authentication state
   clearAuthState: () => {
-    // Clear localStorage
+    // Clear localStorage - only remove fhsfbe625
     if (typeof window !== 'undefined') {
       localStorage.removeItem('fhsfbe625');
     }
     set(initialState);
-  },
-
-  // Clear any existing localStorage data (one-time cleanup)
-  clearLegacyStorage: () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth-storage');
-      // Clear any other auth-related localStorage items
-      Object.keys(localStorage).forEach(key => {
-        if (key.includes('auth') || key.includes('token')) {
-          localStorage.removeItem(key);
-        }
-      });
-      console.log('✅ Cleared all legacy auth localStorage data');
-    }
   },
 }));
 

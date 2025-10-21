@@ -19,9 +19,10 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react'
-import { Search, Download, Plus, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Image as ImageIcon, Images, Building2, Package2, Filter, Maximize2, Minimize2, Upload, Edit, Trash2, Minus } from 'lucide-react'
+import { Search, Download, Plus, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Image as ImageIcon, Images, Building2, Package2, Filter, Maximize2, Minimize2, Upload, Edit, Trash2, Minus } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { ProductsService, type Product, type ProductsFilters, type Brand, type ProductAttributes } from '../lib/products/api'
+import { BrandsService } from '../lib/brands/api'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
@@ -105,6 +106,7 @@ const Products = () => {
       sub_category: '',
       volume_cuft: '',
       short_description: '',
+      description: '',
       shipping_width_in: '',
       shipping_height_in: '',
       shipping_length_in: '',
@@ -165,6 +167,17 @@ const Products = () => {
   const [bulkProducts, setBulkProducts] = useState<Array<any>>([])
   const [importFile, setImportFile] = useState<File | null>(null)
   const [bulkResults, setBulkResults] = useState<any>(null)
+  
+  // Bulk forms management
+  const [bulkForms, setBulkForms] = useState<Array<{
+    id: number
+    isExpanded: boolean
+    data: typeof productFormData
+    subSkus: Array<{ sku: string, quantity: string }>
+    features: string[]
+    customTypes: Array<{key: string, value: string}>
+  }>>([])
+  const [bulkFormIdCounter, setBulkFormIdCounter] = useState(0)
   
   // Listings modal state
   const [showListingsModal, setShowListingsModal] = useState(false)
@@ -410,13 +423,15 @@ const Products = () => {
     if (!state.accessToken) return
     
     try {
-      const [categoriesData, brandsData] = await Promise.all([
+      const [categoriesData, brandsResponse] = await Promise.all([
         ProductsService.getCategories(state.accessToken),
-        ProductsService.getBrands(state.accessToken)
+        BrandsService.getAllBrands(state.accessToken)
       ])
       
       setCategories(categoriesData)
-      setBrands(brandsData)
+      setBrands(brandsResponse.brands || [])
+      
+      console.log('✅ Loaded brands from brands API:', brandsResponse.brands.length)
     } catch (err) {
       console.error('Failed to load filter options:', err)
     }
@@ -579,8 +594,174 @@ const Products = () => {
   
   // Bulk add products handler
   const handleBulkAddProducts = () => {
+    // Initialize with one empty form
+    setBulkForms([{
+      id: 0,
+      isExpanded: true,
+      data: {
+        brandId: '',
+        title: '',
+        groupSku: '',
+        subSku: '',
+        category: '',
+        collectionName: '',
+        shipTypes: '',
+        singleSetItem: 'Single Item',
+        brandRealPrice: '',
+        brandMiscellaneous: '',
+        brandPrice: '',
+        msrp: '',
+        shippingPrice: '',
+        commissionPrice: '',
+        profitMarginPrice: '',
+        ecommerceMiscellaneous: '',
+        ecommercePrice: '',
+        mainImageUrl: '',
+        galleryImages: [''],
+        attributes: {
+          origin: '',
+          weight_lb: '',
+          sub_category: '',
+          volume_cuft: '',
+          short_description: '',
+          description: '',
+          shipping_width_in: '',
+          shipping_height_in: '',
+          shipping_length_in: '',
+          color: '',
+          style: '',
+          material: '',
+          feature_1: '',
+          feature_2: '',
+          feature_3: '',
+          feature_4: '',
+          feature_5: '',
+          feature_6: '',
+          feature_7: '',
+          product_dimension_inch: ''
+        }
+      },
+      subSkus: [{ sku: '', quantity: '0' }],
+      features: [''],
+      customTypes: []
+    }])
+    setBulkFormIdCounter(1)
     setShowBulkModal(true)
     document.body.classList.add('modal-open')
+  }
+  
+  // Add new bulk form
+  const addNewBulkForm = () => {
+    const newForm = {
+      id: bulkFormIdCounter,
+      isExpanded: true,
+      data: {
+        brandId: '',
+        title: '',
+        groupSku: '',
+        subSku: '',
+        category: '',
+        collectionName: '',
+        shipTypes: '',
+        singleSetItem: 'Single Item',
+        brandRealPrice: '',
+        brandMiscellaneous: '',
+        brandPrice: '',
+        msrp: '',
+        shippingPrice: '',
+        commissionPrice: '',
+        profitMarginPrice: '',
+        ecommerceMiscellaneous: '',
+        ecommercePrice: '',
+        mainImageUrl: '',
+        galleryImages: [''],
+        attributes: {
+          origin: '',
+          weight_lb: '',
+          sub_category: '',
+          volume_cuft: '',
+          short_description: '',
+          description: '',
+          shipping_width_in: '',
+          shipping_height_in: '',
+          shipping_length_in: '',
+          color: '',
+          style: '',
+          material: '',
+          feature_1: '',
+          feature_2: '',
+          feature_3: '',
+          feature_4: '',
+          feature_5: '',
+          feature_6: '',
+          feature_7: '',
+          product_dimension_inch: ''
+        }
+      },
+      subSkus: [{ sku: '', quantity: '0' }],
+      features: [''],
+      customTypes: []
+    }
+    
+    // Minimize all other forms and add the new one
+    setBulkForms(prev => prev.map(form => ({ ...form, isExpanded: false })).concat(newForm))
+    setBulkFormIdCounter(prev => prev + 1)
+  }
+  
+  // Toggle bulk form expansion
+  const toggleBulkForm = (id: number) => {
+    setBulkForms(prev => prev.map(form => ({
+      ...form,
+      isExpanded: form.id === id ? !form.isExpanded : false
+    })))
+  }
+  
+  // Remove bulk form
+  const removeBulkForm = (id: number) => {
+    setBulkForms(prev => prev.filter(form => form.id !== id))
+  }
+  
+  // Update bulk form data
+  const updateBulkFormData = (id: number, field: string, value: any) => {
+    setBulkForms(prev => prev.map(form => {
+      if (form.id === id) {
+        return {
+          ...form,
+          data: { ...form.data, [field]: value }
+        }
+      }
+      return form
+    }))
+  }
+  
+  // Update bulk form sub SKUs
+  const updateBulkFormSubSkus = (id: number, newSubSkus: Array<{ sku: string, quantity: string }>) => {
+    setBulkForms(prev => prev.map(form => {
+      if (form.id === id) {
+        return { ...form, subSkus: newSubSkus }
+      }
+      return form
+    }))
+  }
+  
+  // Update bulk form features
+  const updateBulkFormFeatures = (id: number, features: string[]) => {
+    setBulkForms(prev => prev.map(form => {
+      if (form.id === id) {
+        return { ...form, features }
+      }
+      return form
+    }))
+  }
+  
+  // Update bulk form custom types
+  const updateBulkFormCustomTypes = (id: number, customTypes: Array<{key: string, value: string}>) => {
+    setBulkForms(prev => prev.map(form => {
+      if (form.id === id) {
+        return { ...form, customTypes }
+      }
+      return form
+    }))
   }
   
   // Import products handler
@@ -713,6 +894,7 @@ const Products = () => {
         attributes: {
           subCategory: product.attributes?.sub_category || '',
           shortDescription: product.attributes?.short_description || '',
+          description: product.attributes?.description || '',
           origin: product.attributes?.origin || '',
           shippingLength: product.attributes?.shipping_length_in || 0,
           shippingWidth: product.attributes?.shipping_width_in || 0,
@@ -794,6 +976,7 @@ const Products = () => {
       attributes: {
         subCategory: combination.products.map((p: Product) => p.attributes?.sub_category).filter(Boolean).join(', '),
         shortDescription: combination.products.map((p: Product) => p.attributes?.short_description).filter(Boolean).join(' + '),
+        description: combination.products.map((p: Product) => p.attributes?.description).filter(Boolean).join(' + '),
         origin: combination.products[0].attributes?.origin || '',
         shippingLength: Math.max(...combination.products.map((p: Product) => p.attributes?.shipping_length_in || 0)),
         shippingWidth: Math.max(...combination.products.map((p: Product) => p.attributes?.shipping_width_in || 0)),
@@ -973,6 +1156,7 @@ const Products = () => {
         sub_category: '',
         volume_cuft: '',
         short_description: '',
+        description: '',
         shipping_width_in: '',
         shipping_height_in: '',
         shipping_length_in: '',
@@ -1058,6 +1242,7 @@ const Products = () => {
       // Add string attributes only if they have values
       if (productFormData.attributes.sub_category) attributesTemp.subCategory = productFormData.attributes.sub_category
       if (productFormData.attributes.short_description) attributesTemp.shortDescription = productFormData.attributes.short_description
+      if (productFormData.attributes.description) attributesTemp.description = productFormData.attributes.description
       if (productFormData.attributes.origin) attributesTemp.origin = productFormData.attributes.origin
       if (productFormData.attributes.product_dimension_inch) attributesTemp.productDimension = productFormData.attributes.product_dimension_inch
       if (productFormData.attributes.style) attributesTemp.style = productFormData.attributes.style
@@ -1367,6 +1552,8 @@ const Products = () => {
   const handleCloseBulkModal = () => {
     setShowBulkModal(false)
     setBulkProducts([])
+    setBulkForms([])
+    setBulkFormIdCounter(0)
     document.body.classList.remove('modal-open')
   }
   
@@ -1390,9 +1577,9 @@ const Products = () => {
     setBulkProducts(bulkProducts.filter((_, i) => i !== index))
   }
   
-  // Create multiple products
+  // Create multiple products from bulk forms
   const handleBulkCreate = async () => {
-    if (!state.accessToken || bulkProducts.length === 0) return
+    if (!state.accessToken || bulkForms.length === 0) return
 
     try {
       setIsSubmitting(true)
@@ -1404,32 +1591,58 @@ const Products = () => {
         duplicates: [] as any[]
       }
       
-      for (const product of bulkProducts) {
+      for (const form of bulkForms) {
         try {
           // Get brand name from brands list
-          const selectedBrand = brands.find(b => b.id.toString() === product.brandId)
+          const selectedBrand = brands.find(b => b.id.toString() === form.data.brandId)
           const brandName = selectedBrand?.name || ''
+          
+          if (!brandName) {
+            results.errors.push({ product: form.data.title, error: 'Brand is required' })
+            continue
+          }
+          
+          // Combine sub SKUs
+          const subSkuString = form.subSkus.map(item => item.sku).filter(sku => sku.trim()).join(',')
+          
+          // Process features
+          const filteredFeatures = form.features.filter(f => f.trim() !== '')
+          
+          // Build attributes with all fields
+          const attributesTemp: any = { ...form.data.attributes }
+          
+          // Add features array if not empty
+          if (filteredFeatures.length > 0) {
+            attributesTemp.features = filteredFeatures
+          }
+          
+          // Add custom types to attributes
+          form.customTypes.forEach((type) => {
+            if (type.key.trim() && type.value.trim()) {
+              attributesTemp[type.key] = type.value
+            }
+          })
           
           // Prepare JSON payload
           const payload = {
-            groupSku: product.groupSku,
-            subSku: product.subSku,
+            groupSku: form.data.groupSku,
+            subSku: subSkuString,
             brandName: brandName,
-            title: product.title,
-            category: product.category,
-            collectionName: product.collectionName,
-            shipTypes: product.shipTypes || '',
-            singleSetItem: product.singleSetItem,
-            brandRealPrice: parseFloat(product.brandRealPrice) || 0,
-            brandMiscellaneous: parseFloat(product.brandMiscellaneous) || 0,
-            msrp: parseFloat(product.msrp) || 0,
-            shippingPrice: parseFloat(product.shippingPrice) || 0,
-            commissionPrice: parseFloat(product.commissionPrice) || 0,
-            profitMarginPrice: parseFloat(product.profitMarginPrice) || 0,
-            ecommerceMiscellaneous: parseFloat(product.ecommerceMiscellaneous) || 0,
-            mainImageUrl: product.mainImageUrl || '',
-            galleryImages: product.galleryImages?.filter((url: string) => url.trim() !== '') || [],
-            attributes: product.attributes
+            title: form.data.title,
+            category: form.data.category,
+            collectionName: form.data.collectionName,
+            shipTypes: form.data.shipTypes || '',
+            singleSetItem: form.data.singleSetItem,
+            brandRealPrice: parseFloat(form.data.brandRealPrice) || 0,
+            brandMiscellaneous: parseFloat(form.data.brandMiscellaneous) || 0,
+            msrp: parseFloat(form.data.msrp) || 0,
+            shippingPrice: parseFloat(form.data.shippingPrice) || 0,
+            commissionPrice: parseFloat(form.data.commissionPrice) || 0,
+            profitMarginPrice: parseFloat(form.data.profitMarginPrice) || 0,
+            ecommerceMiscellaneous: parseFloat(form.data.ecommerceMiscellaneous) || 0,
+            mainImageUrl: form.data.mainImageUrl || '',
+            galleryImages: form.data.galleryImages?.filter((url: string) => url.trim() !== '') || [],
+            attributes: attributesTemp
           }
           
           const response = await fetch('http://192.168.0.22:5000/api/products', {
@@ -1446,16 +1659,16 @@ const Products = () => {
             results.created.push(data)
           } else {
             const errorData = await response.json().catch(() => ({}))
-            results.errors.push({ product: product.title, error: errorData.message || `Error ${response.status}` })
+            results.errors.push({ product: form.data.title, error: errorData.message || `Error ${response.status}` })
           }
         } catch (err: any) {
-          results.errors.push({ product: product.title, error: err.message })
+          results.errors.push({ product: form.data.title, error: err.message })
         }
       }
       
       setBulkResults({
         summary: {
-          total: bulkProducts.length,
+          total: bulkForms.length,
           created: results.created.length,
           errors: results.errors.length,
           duplicates: results.duplicates.length
@@ -1719,6 +1932,7 @@ const Products = () => {
         sub_category: product.attributes?.sub_category?.toString() || '',
         volume_cuft: product.attributes?.volume_cuft?.toString() || '',
         short_description: product.attributes?.short_description?.toString() || '',
+        description: product.attributes?.description?.toString() || '',
         shipping_width_in: product.attributes?.shipping_width_in?.toString() || '',
         shipping_height_in: product.attributes?.shipping_height_in?.toString() || '',
         shipping_length_in: product.attributes?.shipping_length_in?.toString() || '',
@@ -1736,9 +1950,13 @@ const Products = () => {
       }
     })
     
-    // Populate Sub SKUs
+    // Populate Sub SKUs - split comma-separated values
     if (product.subSku) {
-      setSubSkus([{ sku: product.subSku, quantity: '0' }])
+      const subSkuArray = product.subSku.split(',').map(sku => ({
+        sku: sku.trim(),
+        quantity: '0'
+      }))
+      setSubSkus(subSkuArray.length > 0 ? subSkuArray : [{ sku: '', quantity: '0' }])
     } else {
       setSubSkus([{ sku: '', quantity: '0' }])
     }
@@ -1855,7 +2073,7 @@ const Products = () => {
         title: productFormData.title,
         category: productFormData.category,
         collectionName: productFormData.collectionName,
-        shipTypes: productFormData.shipTypes || '',
+        
         singleSetItem: productFormData.singleSetItem,
         brandRealPrice: parseFloat(productFormData.brandRealPrice) || 0,
         brandMiscellaneous: parseFloat(productFormData.brandMiscellaneous) || 0,
@@ -2373,7 +2591,7 @@ const Products = () => {
                         { key: 'mainImage', label: 'Image', width: 150 },
                         { key: 'title', label: 'Title', width: 150 },
                         { key: 'groupSku', label: 'Group SKU', width: 150 },
-                        { key: 'subSku', label: 'Sub SKU', width: 150 },
+                        { key: 'subSku', label: 'Sub SKU', width: 180 },
                         { key: 'category', label: 'Category', width: 150 },
                         { key: 'brand', label: 'Brand', width: 180 },
                         { key: 'collection', label: 'Collection', width: 150 },
@@ -2388,6 +2606,7 @@ const Products = () => {
                         { key: 'ecomMisc', label: 'Ecom Misc', width: 150 },
                         { key: 'ecomPrice', label: 'Ecom Price', width: 150 },
                         { key: 'gallery', label: 'Gallery', width: 150 },
+                        { key: 'description', label: 'Description', width: 200 },
                         { key: 'info', label: 'Info', width: 150 },
                         { key: 'actions', label: 'Actions', width: 150 }
                       ].map((col) => (
@@ -2566,6 +2785,9 @@ const Products = () => {
                               </div>
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell className="text-center" style={{ width: `${getColumnWidth('description', 200)}px` }}>
+                          {renderExpandableCell(product.attributes?.description || '-', product.id, 'description', 200)}
                         </TableCell>
                         <TableCell className="text-center" style={{ width: `${getColumnWidth('info', 170)}px` }}>
                           <Button
@@ -2754,8 +2976,22 @@ const Products = () => {
                         <TableCell className="font-mono text-sm">{selectedProductInfo.groupSku}</TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Sub SKU</TableCell>
-                        <TableCell className="font-mono text-sm">{selectedProductInfo.subSku}</TableCell>
+                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Sub SKU{selectedProductInfo.subSku?.includes(',') ? 's' : ''}</TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {selectedProductInfo.subSku ? (
+                            <div className="flex flex-wrap gap-2">
+                              {selectedProductInfo.subSku.split(',').map((sku, idx) => (
+                                <Badge 
+                                  key={idx} 
+                                  variant="outline" 
+                                  className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-300 dark:border-blue-700"
+                                >
+                                  {sku.trim()}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : '-'}
+                        </TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Category</TableCell>
@@ -2777,10 +3013,7 @@ const Products = () => {
                           </Badge>
                         </TableCell>
                       </TableRow>
-                      <TableRow>
-                        <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Ship Types</TableCell>
-                        <TableCell>{selectedProductInfo.shipTypes || '-'}</TableCell>
-                      </TableRow>
+                      
                       <TableRow>
                         <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Created At</TableCell>
                         <TableCell>{formatDate(selectedProductInfo.createdAt)}</TableCell>
@@ -3087,18 +3320,7 @@ const Products = () => {
                     />
                   </div>
                   
-                  {/* <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                      Ship Types
-                    </label>
-                    <Input
-                      type="text"
-                      value={productFormData.shipTypes}
-                      onChange={(e) => setProductFormData({...productFormData, shipTypes: e.target.value})}
-                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
-                      placeholder="e.g. Standard Shipping, White Glove"
-                    />
-                  </div> */}
+                 
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
@@ -3115,7 +3337,7 @@ const Products = () => {
                         <SelectItem value="Single Item">Single Item</SelectItem>
                         <SelectItem value="Set">Set</SelectItem>
                         <SelectItem value="Part">Part</SelectItem>
-                        <SelectItem value="Bundle">Bundle</SelectItem>
+                        
                       </SelectContent>
                     </Select>
                   </div>
@@ -3277,6 +3499,8 @@ const Products = () => {
                       className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
                     />
                   </div>
+
+                  
                   
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Short Description</label>
@@ -3284,6 +3508,16 @@ const Products = () => {
                       type="text"
                       value={productFormData.attributes.short_description}
                       onChange={(e) => setProductFormData({...productFormData, attributes: {...productFormData.attributes, short_description: e.target.value}})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                  
+                  <div className="md:col-span-3">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Description</label>
+                    <Input
+                      type="text"
+                      value={productFormData.attributes.description}
+                      onChange={(e) => setProductFormData({...productFormData, attributes: {...productFormData.attributes, description: e.target.value}})}
                       className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
                     />
                   </div>
@@ -3778,10 +4012,8 @@ const Products = () => {
                       <div className="flex-1">
                         <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Sub SKU</label>
                       </div>
-                      <div className="w-40">
-                        <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Quantity</label>
-                      </div>
-                      <div className="w-24"></div>
+                     
+                      
                     </div>
                     <div className="space-y-2">
                       {subSkus.map((item, index) => (
@@ -3796,39 +4028,7 @@ const Products = () => {
                               required={index === 0}
                             />
                           </div>
-                          <div className="w-40 flex items-center gap-1">
-                            <Button
-                              type="button"
-                              onClick={() => {
-                                const newSubSkus = [...subSkus]
-                                const currentQty = parseInt(newSubSkus[index].quantity) || 0
-                                newSubSkus[index].quantity = Math.max(0, currentQty - 1).toString()
-                                setSubSkus(newSubSkus)
-                              }}
-                              variant="outline"
-                              size="sm"
-                              className="h-9 w-9 p-0"
-                            >
-                              <Minus className="w-3 h-3" />
-                            </Button>
-                            <div className="flex-1 text-center font-semibold text-sm py-2 px-2 border rounded bg-gray-50 dark:bg-gray-700">
-                              {item.quantity || '0'}
-                            </div>
-                            <Button
-                              type="button"
-                              onClick={() => {
-                                const newSubSkus = [...subSkus]
-                                const currentQty = parseInt(newSubSkus[index].quantity) || 0
-                                newSubSkus[index].quantity = (currentQty + 1).toString()
-                                setSubSkus(newSubSkus)
-                              }}
-                              variant="outline"
-                              size="sm"
-                              className="h-9 w-9 p-0"
-                            >
-                              <Plus className="w-3 h-3" />
-                            </Button>
-                          </div>
+                          
                           <div className="w-24 flex gap-2">
                             {index === subSkus.length - 1 && (
                               <Button
@@ -3855,7 +4055,6 @@ const Products = () => {
                       ))}
                     </div>
                   </div>
-... 1825 lines not shown ...
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
@@ -3882,18 +4081,7 @@ const Products = () => {
                     />
                   </div>
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                      Ship Types
-                    </label>
-                    <Input
-                      type="text"
-                      value={productFormData.shipTypes}
-                      onChange={(e) => setProductFormData({...productFormData, shipTypes: e.target.value})}
-                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
-                      placeholder="e.g. Standard Shipping, White Glove"
-                    />
-                  </div>
+                 
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
@@ -3910,7 +4098,7 @@ const Products = () => {
                         <SelectItem value="Single Item">Single Item</SelectItem>
                         <SelectItem value="Set">Set</SelectItem>
                         <SelectItem value="Part">Part</SelectItem>
-                        <SelectItem value="Bundle">Bundle</SelectItem>
+                        
                       </SelectContent>
                     </Select>
                   </div>
@@ -4077,6 +4265,16 @@ const Products = () => {
                       type="text"
                       value={productFormData.attributes.short_description}
                       onChange={(e) => setProductFormData({...productFormData, attributes: {...productFormData.attributes, short_description: e.target.value}})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                  
+                  <div className="md:col-span-3">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Description</label>
+                    <Input
+                      type="text"
+                      value={productFormData.attributes.description}
+                      onChange={(e) => setProductFormData({...productFormData, attributes: {...productFormData.attributes, description: e.target.value}})}
                       className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
                     />
                   </div>
@@ -4565,14 +4763,19 @@ const Products = () => {
         </div>
       )}
       
-      {/* Bulk Add Products Modal */}
+      {/* Bulk Add Products Modal - Collapsible Forms */}
       {showBulkModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 w-full max-w-6xl max-h-[95vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-semibold text-gray-900 dark:text-slate-100">
-                Bulk Add Products
-              </h3>
+              <div>
+                <h3 className="text-2xl font-semibold text-gray-900 dark:text-slate-100">
+                  Bulk Add Products
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                  {bulkForms.length} product{bulkForms.length !== 1 ? 's' : ''} ready to create
+                </p>
+              </div>
               <Button
                 onClick={handleCloseBulkModal}
                 variant="ghost"
@@ -4583,76 +4786,643 @@ const Products = () => {
               </Button>
             </div>
             
-            {/* Add Product Form */}
-            <div className="border dark:border-slate-700 rounded-lg p-4 mb-4">
-              <h4 className="font-medium text-gray-900 dark:text-slate-100 mb-3">Add Product to List</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Title</label>
-                  <Input
-                    type="text"
-                    value={productFormData.title}
-                    onChange={(e) => setProductFormData({...productFormData, title: e.target.value})}
-                    className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
-                    placeholder="Product title"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Group SKU</label>
-                  <Input
-                    type="text"
-                    value={productFormData.groupSku}
-                    onChange={(e) => setProductFormData({...productFormData, groupSku: e.target.value})}
-                    className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
-                    placeholder="Group SKU"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Sub SKU</label>
-                  <Input
-                    type="text"
-                    value={productFormData.subSku}
-                    onChange={(e) => setProductFormData({...productFormData, subSku: e.target.value})}
-                    className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
-                    placeholder="Sub SKU"
-                  />
-                </div>
-              </div>
-              <Button
-                onClick={addBulkProduct}
-                disabled={!productFormData.title.trim() || !productFormData.groupSku.trim() || !productFormData.subSku.trim()}
-                className="mt-3 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
-              >
-                Add to List
-              </Button>
-            </div>
-
-            {/* Products List */}
-            {bulkProducts.length > 0 && (
-              <div className="border dark:border-slate-700 rounded-lg p-4 mb-4">
-                <h4 className="font-medium text-gray-900 dark:text-slate-100 mb-3">Products to Create ({bulkProducts.length})</h4>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {bulkProducts.map((product, index) => (
-                    <div key={index} className="flex items-center justify-between bg-gray-50 dark:bg-slate-700 p-2 rounded">
-                      <div>
-                        <span className="font-medium">{product.title}</span>
-                        <span className="text-sm text-gray-600 dark:text-slate-400 ml-2">- {product.groupSku} / {product.subSku}</span>
+            {/* Collapsible Product Forms */}
+            <div className="space-y-4 mb-6">
+              {bulkForms.map((form, formIndex) => (
+                <div
+                  key={form.id}
+                  className="border dark:border-slate-700 rounded-lg overflow-hidden"
+                >
+                  {/* Form Header - Clickable to expand/collapse */}
+                  <div
+                    onClick={() => toggleBulkForm(form.id)}
+                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-700/50 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-semibold">
+                        {formIndex + 1}
                       </div>
+                      <div>
+                        <h4 className="font-medium text-gray-900 dark:text-slate-100">
+                          {form.data.title || `Product ${formIndex + 1}`}
+                        </h4>
+                        <p className="text-sm text-gray-600 dark:text-slate-400">
+                          {form.data.groupSku || 'No SKU'} • {form.data.category || 'No Category'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <Button
-                        onClick={() => removeBulkProduct(index)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          removeBulkForm(form.id)
+                        }}
                         variant="ghost"
                         size="sm"
                         className="text-red-500 hover:text-red-700"
                       >
                         <X className="h-4 w-4" />
                       </Button>
+                      <ChevronDown
+                        className={`h-5 w-5 text-gray-500 transition-transform ${
+                          form.isExpanded ? 'transform rotate-180' : ''
+                        }`}
+                      />
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  </div>
 
-            <div className="flex gap-2 justify-end">
+                  {/* Form Content - Collapsible */}
+                  {form.isExpanded && (
+                    <div className="p-6 space-y-6">
+                      {/* Basic Information */}
+                      <div className="border dark:border-slate-700 rounded-lg p-4">
+                        <h5 className="font-semibold text-lg text-gray-900 dark:text-slate-100 mb-4">Basic Information</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                              Brand <span className="text-red-500">*</span>
+                            </label>
+                            <Select
+                              value={form.data.brandId}
+                              onValueChange={(value) => updateBulkFormData(form.id, 'brandId', value)}
+                            >
+                              <SelectTrigger className="dark:bg-slate-700 dark:text-slate-100">
+                                <SelectValue placeholder="Select Brand" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {brands.map((brand) => (
+                                  <SelectItem key={brand.id} value={brand.id.toString()}>
+                                    {brand.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                              Title <span className="text-red-500">*</span>
+                            </label>
+                            <Input
+                              type="text"
+                              value={form.data.title}
+                              onChange={(e) => updateBulkFormData(form.id, 'title', e.target.value)}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                              Group SKU <span className="text-red-500">*</span>
+                            </label>
+                            <Input
+                              type="text"
+                              value={form.data.groupSku}
+                              onChange={(e) => updateBulkFormData(form.id, 'groupSku', e.target.value)}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div className="md:col-span-3">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                              Sub SKU <span className="text-red-500">*</span>
+                            </label>
+                            <div className="space-y-2">
+                              {form.subSkus.map((item, index) => (
+                                <div key={index} className="flex gap-3">
+                                  <div className="flex-1">
+                                    <Input
+                                      type="text"
+                                      value={item.sku}
+                                      onChange={(e) => {
+                                        const newSubSkus = [...form.subSkus]
+                                        newSubSkus[index].sku = e.target.value
+                                        updateBulkFormSubSkus(form.id, newSubSkus)
+                                      }}
+                                      className="dark:bg-slate-700 dark:text-slate-100"
+                                      placeholder={`Sub SKU ${index + 1}`}
+                                    />
+                                  </div>
+                                  <div className="w-24 flex gap-2">
+                                    {index === form.subSkus.length - 1 && (
+                                      <Button
+                                        type="button"
+                                        onClick={() => {
+                                          updateBulkFormSubSkus(form.id, [...form.subSkus, { sku: '', quantity: '0' }])
+                                        }}
+                                        size="sm"
+                                        className="bg-emerald-500 hover:bg-emerald-600 text-white flex-1"
+                                      >
+                                        <Plus className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    {index > 0 && (
+                                      <Button
+                                        type="button"
+                                        onClick={() => {
+                                          updateBulkFormSubSkus(form.id, form.subSkus.filter((_, i) => i !== index))
+                                        }}
+                                        size="sm"
+                                        className="bg-rose-500 hover:bg-rose-600 text-white flex-1"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                              Category <span className="text-red-500">*</span>
+                            </label>
+                            <Input
+                              type="text"
+                              value={form.data.category}
+                              onChange={(e) => updateBulkFormData(form.id, 'category', e.target.value)}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                              Collection Name
+                            </label>
+                            <Input
+                              type="text"
+                              value={form.data.collectionName}
+                              onChange={(e) => updateBulkFormData(form.id, 'collectionName', e.target.value)}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                              Single/Set Item
+                            </label>
+                            <Select
+                              value={form.data.singleSetItem}
+                              onValueChange={(value) => updateBulkFormData(form.id, 'singleSetItem', value)}
+                            >
+                              <SelectTrigger className="dark:bg-slate-700 dark:text-slate-100">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Single Item">Single Item</SelectItem>
+                                <SelectItem value="Set">Set</SelectItem>
+                                <SelectItem value="Part">Part</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Pricing Information */}
+                      <div className="border dark:border-slate-700 rounded-lg p-4">
+                        <h5 className="font-semibold text-lg text-gray-900 dark:text-slate-100 mb-4">Pricing Information</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                              Brand Real Price <span className="text-red-500">*</span>
+                            </label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={form.data.brandRealPrice}
+                              onChange={(e) => updateBulkFormData(form.id, 'brandRealPrice', e.target.value)}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                              Brand Miscellaneous
+                            </label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={form.data.brandMiscellaneous}
+                              onChange={(e) => updateBulkFormData(form.id, 'brandMiscellaneous', e.target.value)}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                              MSRP <span className="text-red-500">*</span>
+                            </label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={form.data.msrp}
+                              onChange={(e) => updateBulkFormData(form.id, 'msrp', e.target.value)}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                              Shipping Price
+                            </label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={form.data.shippingPrice}
+                              onChange={(e) => updateBulkFormData(form.id, 'shippingPrice', e.target.value)}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                              Commission Price
+                            </label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={form.data.commissionPrice}
+                              onChange={(e) => updateBulkFormData(form.id, 'commissionPrice', e.target.value)}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                              Profit Margin
+                            </label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={form.data.profitMarginPrice}
+                              onChange={(e) => updateBulkFormData(form.id, 'profitMarginPrice', e.target.value)}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                              Ecommerce Miscellaneous
+                            </label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={form.data.ecommerceMiscellaneous}
+                              onChange={(e) => updateBulkFormData(form.id, 'ecommerceMiscellaneous', e.target.value)}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Product Attributes */}
+                      <div className="border dark:border-slate-700 rounded-lg p-4">
+                        <h5 className="font-semibold text-lg text-gray-900 dark:text-slate-100 mb-4">Product Attributes</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Origin</label>
+                            <Input
+                              type="text"
+                              value={form.data.attributes.origin}
+                              onChange={(e) => updateBulkFormData(form.id, 'attributes', {...form.data.attributes, origin: e.target.value})}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Weight (lb)</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={form.data.attributes.weight_lb}
+                              onChange={(e) => updateBulkFormData(form.id, 'attributes', {...form.data.attributes, weight_lb: e.target.value})}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Sub Category</label>
+                            <Input
+                              type="text"
+                              value={form.data.attributes.sub_category}
+                              onChange={(e) => updateBulkFormData(form.id, 'attributes', {...form.data.attributes, sub_category: e.target.value})}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Volume (cuft)</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={form.data.attributes.volume_cuft}
+                              onChange={(e) => updateBulkFormData(form.id, 'attributes', {...form.data.attributes, volume_cuft: e.target.value})}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Short Description</label>
+                            <Input
+                              type="text"
+                              value={form.data.attributes.short_description}
+                              onChange={(e) => updateBulkFormData(form.id, 'attributes', {...form.data.attributes, short_description: e.target.value})}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div className="md:col-span-3">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Description</label>
+                            <Input
+                              type="text"
+                              value={form.data.attributes.description}
+                              onChange={(e) => updateBulkFormData(form.id, 'attributes', {...form.data.attributes, description: e.target.value})}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Shipping Width (in)</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={form.data.attributes.shipping_width_in}
+                              onChange={(e) => updateBulkFormData(form.id, 'attributes', {...form.data.attributes, shipping_width_in: e.target.value})}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Shipping Height (in)</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={form.data.attributes.shipping_height_in}
+                              onChange={(e) => updateBulkFormData(form.id, 'attributes', {...form.data.attributes, shipping_height_in: e.target.value})}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Shipping Length (in)</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={form.data.attributes.shipping_length_in}
+                              onChange={(e) => updateBulkFormData(form.id, 'attributes', {...form.data.attributes, shipping_length_in: e.target.value})}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Color</label>
+                            <Input
+                              type="text"
+                              value={form.data.attributes.color}
+                              onChange={(e) => updateBulkFormData(form.id, 'attributes', {...form.data.attributes, color: e.target.value})}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Style</label>
+                            <Input
+                              type="text"
+                              value={form.data.attributes.style}
+                              onChange={(e) => updateBulkFormData(form.id, 'attributes', {...form.data.attributes, style: e.target.value})}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Material</label>
+                            <Input
+                              type="text"
+                              value={form.data.attributes.material}
+                              onChange={(e) => updateBulkFormData(form.id, 'attributes', {...form.data.attributes, material: e.target.value})}
+                              className="dark:bg-slate-700 dark:text-slate-100"
+                            />
+                          </div>
+                          
+                          {/* Features */}
+                          <div className="md:col-span-3">
+                            <div className="flex items-center justify-between mb-3">
+                              <h6 className="font-medium text-gray-900 dark:text-slate-100">Product Features</h6>
+                            </div>
+                            <div className="space-y-2">
+                              {form.features.map((feature, index) => (
+                                <div key={index} className="flex gap-2">
+                                  <Input
+                                    type="text"
+                                    value={feature}
+                                    onChange={(e) => {
+                                      const newFeatures = [...form.features]
+                                      newFeatures[index] = e.target.value
+                                      updateBulkFormFeatures(form.id, newFeatures)
+                                    }}
+                                    className="dark:bg-slate-700 dark:text-slate-100"
+                                    placeholder={`Feature ${index + 1}`}
+                                  />
+                                  {index === form.features.length - 1 && (
+                                    <Button
+                                      type="button"
+                                      onClick={() => {
+                                        updateBulkFormFeatures(form.id, [...form.features, ''])
+                                      }}
+                                      size="sm"
+                                      className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                                    >
+                                      <Plus className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  {index > 0 && (
+                                    <Button
+                                      type="button"
+                                      onClick={() => {
+                                        updateBulkFormFeatures(form.id, form.features.filter((_, i) => i !== index))
+                                      }}
+                                      size="sm"
+                                      className="bg-rose-500 hover:bg-rose-600 text-white"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          
+                          {/* Custom Types */}
+                          <div className="md:col-span-3">
+                            <div className="flex items-center justify-between mb-3">
+                              <h6 className="font-medium text-gray-900 dark:text-slate-100">Custom Types</h6>
+                              <Button
+                                type="button"
+                                onClick={() => {
+                                  updateBulkFormCustomTypes(form.id, [...form.customTypes, { key: '', value: '' }])
+                                }}
+                                size="sm"
+                                className="bg-indigo-500 hover:bg-indigo-600 text-white"
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add New Type
+                              </Button>
+                            </div>
+                            {form.customTypes.length > 0 && (
+                              <div className="space-y-3">
+                                {form.customTypes.map((type, index) => (
+                                  <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-gray-50 dark:bg-slate-700/30 rounded-lg">
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                                        Key
+                                      </label>
+                                      <Input
+                                        type="text"
+                                        value={type.key}
+                                        onChange={(e) => {
+                                          const newCustomTypes = [...form.customTypes]
+                                          newCustomTypes[index].key = e.target.value
+                                          updateBulkFormCustomTypes(form.id, newCustomTypes)
+                                        }}
+                                        className="dark:bg-slate-700 dark:text-slate-100"
+                                        placeholder="e.g., warranty"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                                        Value
+                                      </label>
+                                      <div className="flex gap-2">
+                                        <Input
+                                          type="text"
+                                          value={type.value}
+                                          onChange={(e) => {
+                                            const newCustomTypes = [...form.customTypes]
+                                            newCustomTypes[index].value = e.target.value
+                                            updateBulkFormCustomTypes(form.id, newCustomTypes)
+                                          }}
+                                          className="dark:bg-slate-700 dark:text-slate-100"
+                                          placeholder="e.g., 1 year"
+                                        />
+                                        <Button
+                                          type="button"
+                                          onClick={() => {
+                                            updateBulkFormCustomTypes(form.id, form.customTypes.filter((_, i) => i !== index))
+                                          }}
+                                          size="sm"
+                                          className="bg-rose-500 hover:bg-rose-600 text-white"
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Images */}
+                      <div className="border dark:border-slate-700 rounded-lg p-4">
+                        <h5 className="font-semibold text-lg text-gray-900 dark:text-slate-100 mb-4">Images</h5>
+                        
+                        {/* Main Image */}
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                            Main Image URL
+                          </label>
+                          <Input
+                            type="url"
+                            value={form.data.mainImageUrl}
+                            onChange={(e) => updateBulkFormData(form.id, 'mainImageUrl', e.target.value)}
+                            className="dark:bg-slate-700 dark:text-slate-100"
+                            placeholder="Enter main image URL"
+                          />
+                        </div>
+                        
+                        {/* Gallery Images */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                            Gallery Images URLs
+                          </label>
+                          <div className="space-y-2">
+                            {form.data.galleryImages.map((url, index) => (
+                              <div key={index} className="flex gap-2">
+                                <Input
+                                  type="url"
+                                  value={url}
+                                  onChange={(e) => {
+                                    const newGallery = [...form.data.galleryImages]
+                                    newGallery[index] = e.target.value
+                                    updateBulkFormData(form.id, 'galleryImages', newGallery)
+                                  }}
+                                  className="dark:bg-slate-700 dark:text-slate-100"
+                                  placeholder={`Gallery image ${index + 1} URL`}
+                                />
+                                {index === form.data.galleryImages.length - 1 && (
+                                  <Button
+                                    type="button"
+                                    onClick={() => {
+                                      updateBulkFormData(form.id, 'galleryImages', [...form.data.galleryImages, ''])
+                                    }}
+                                    size="sm"
+                                    className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {form.data.galleryImages.length > 1 && (
+                                  <Button
+                                    type="button"
+                                    onClick={() => {
+                                      const newGallery = form.data.galleryImages.filter((_, i) => i !== index)
+                                      updateBulkFormData(form.id, 'galleryImages', newGallery)
+                                    }}
+                                    size="sm"
+                                    className="bg-rose-500 hover:bg-rose-600 text-white"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Add More Button */}
+            <div className="mb-6">
+              <Button
+                onClick={addNewBulkForm}
+                className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add More Product
+              </Button>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 justify-end border-t dark:border-slate-700 pt-4">
               <Button
                 onClick={handleCloseBulkModal}
                 variant="outline"
@@ -4662,10 +5432,10 @@ const Products = () => {
               </Button>
               <Button
                 onClick={handleBulkCreate}
-                disabled={isSubmitting || bulkProducts.length === 0}
+                disabled={isSubmitting || bulkForms.length === 0}
                 className="bg-green-600 hover:bg-green-700 text-white"
               >
-                {isSubmitting ? 'Creating...' : `Create ${bulkProducts.length} Products`}
+                {isSubmitting ? 'Creating...' : `Create ${bulkForms.length} Product${bulkForms.length !== 1 ? 's' : ''}`}
               </Button>
             </div>
           </div>

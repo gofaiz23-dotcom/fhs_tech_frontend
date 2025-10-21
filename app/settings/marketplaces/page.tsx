@@ -283,7 +283,7 @@ export default function MarketplacesPage() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
               <input
                 type="text"
-                placeholder="Search marketplaces..."
+                placeholder="   Search marketplaces..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="input-soft pl-10 pr-4 py-2 w-64"
