@@ -3,5 +3,10 @@
  */
 
 export * from './api.utils';
-export { default as passwordValidation } from './passwordValidation';
+export { 
+  validatePassword,
+  getPasswordStrengthColor,
+  getPasswordStrengthText,
+  type PasswordValidationResult
+} from './passwordValidation';
 
