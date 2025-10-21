@@ -115,9 +115,21 @@ export { HttpClient } from './auth/httpClient';
 // ============================================================================
 export { AdminService } from './admin/api';
 export type { 
-  AdminUser, 
-  AdminUserResponse, 
-  AdminUsersResponse,
+  AdminUser,
+  DetailedUser,
+  UserWithHistory,
+  LoginSession,
+  LoginStats,
+  AccessPermission,
+  AccessSummary,
+  BasicUsersResponse,
+  UsersWithHistoryResponse,
+  AllUsersResponse,
+  SingleUserResponse,
+  UpdateUserResponse,
+  UpdateEmailRequest,
+  UpdatePasswordRequest,
+  UpdateRoleRequest,
 } from './admin/types';
 
 // ============================================================================
@@ -168,7 +180,21 @@ export type { StatusResponse } from './status/api';
 // ============================================================================
 // Settings
 // ============================================================================
-export { SettingsService } from './settings/api';
+export { 
+  getSettings, 
+  updateSettings, 
+  getBrands, 
+  updateBrandMapping 
+} from './settings/api';
+
+export type {
+  Setting,
+  InventoryConfig,
+  SettingsResponse,
+  BrandMapping,
+  BrandsResponse,
+  UpdateBrandResponse,
+} from './settings/api';
 
 // ============================================================================
 // Stores (Zustand State Management)
@@ -191,8 +217,8 @@ export { activityLogger } from './activity-logger';
 // Access Control
 // ============================================================================
 export { 
-  checkAccess, 
-  getUserPermissions, 
-  updateUserPermissions,
+  AccessControlService,
+  AccessControlUtils,
+  AccessControlApiError,
 } from './access-control';
 
