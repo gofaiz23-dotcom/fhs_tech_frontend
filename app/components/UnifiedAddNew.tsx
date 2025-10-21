@@ -1,7 +1,7 @@
 "use client"
 
 import React from 'react';
-import { Plus, Store, Package, Truck, Upload, FileText } from 'lucide-react';
+import { Plus, Store, Package, Truck, Upload, FileText, ImagePlus } from 'lucide-react';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -23,10 +23,12 @@ interface UnifiedAddNewProps {
   onAddProduct?: () => void;
   onBulkAddProduct?: () => void;
   onImportProduct?: () => void;
+  onBulkImagesProduct?: () => void;
   // Listings props
   onAddListing?: () => void;
   onBulkAddListing?: () => void;
   onImportListing?: () => void;
+  onBulkImagesListing?: () => void;
   // Platform type to determine which tabs to show
   platformType?: 'marketplace' | 'brands' | 'shipping' | 'products' | 'listings';
   className?: string;
@@ -45,9 +47,11 @@ const UnifiedAddNew: React.FC<UnifiedAddNewProps> = ({
   onAddProduct,
   onBulkAddProduct,
   onImportProduct,
+  onBulkImagesProduct,
   onAddListing,
   onBulkAddListing,
   onImportListing,
+  onBulkImagesListing,
   platformType = 'marketplace',
   className = ""
 }) => {
@@ -245,6 +249,17 @@ const UnifiedAddNew: React.FC<UnifiedAddNewProps> = ({
                       <Upload className="w-4 h-4 mr-2" />
                       Import File
                     </Button>
+                    <Button
+                      onClick={() => {
+                        onBulkImagesProduct?.();
+                        setOpen(false);
+                      }}
+                      className="w-full justify-start"
+                      variant="outline"
+                    >
+                      <ImagePlus className="w-4 h-4 mr-2" />
+                      Add Bulk Images
+                    </Button>
                   </>
                 )}
                 
@@ -282,6 +297,17 @@ const UnifiedAddNew: React.FC<UnifiedAddNewProps> = ({
                     >
                       <Upload className="w-4 h-4 mr-2" />
                       Import File
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        onBulkImagesListing?.();
+                        setOpen(false);
+                      }}
+                      className="w-full justify-start"
+                      variant="outline"
+                    >
+                      <ImagePlus className="w-4 h-4 mr-2" />
+                      Add Bulk Images
                     </Button>
                   </>
                 )}

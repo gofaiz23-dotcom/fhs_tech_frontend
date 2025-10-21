@@ -10,6 +10,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Search, Download, Plus, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Maximize2, Minimize2, Upload, Edit, Trash2 } from 'lucide-react'
 import { useAuth } from '../lib/auth'
+import { useToast } from '../lib/hooks/use-toast'
 import { InventoryService, type InventoryItem, type Brand, type UpdateInventoryRequest } from '../lib/inventory/api'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -22,6 +23,7 @@ import './table-scroll.css'
 
 const Inventory = () => {
   const { state } = useAuth()
+  const { toast } = useToast()
   
   // State management
   const [inventory, setInventory] = useState<InventoryItem[]>([])
@@ -355,7 +357,11 @@ const Inventory = () => {
     const dataToExport = filteredInventory
     
     if (dataToExport.length === 0) {
-      alert('No inventory items to export')
+      toast({
+        variant: "destructive",
+        title: "No Data",
+        description: "No inventory items to export",
+      })
       return
     }
     
@@ -400,7 +406,11 @@ const Inventory = () => {
     document.body.removeChild(link)
     
     // Show success message
-    alert(`Successfully exported ${dataToExport.length} inventory item(s)!`)
+    toast({
+      variant: "success",
+      title: "Export Complete",
+      description: `Successfully exported ${dataToExport.length} inventory item(s)!`,
+    })
   }
   
   // Edit inventory handler
@@ -448,7 +458,11 @@ const Inventory = () => {
       setSelectedInventory(null)
       document.body.classList.remove('modal-open')
       
-      alert('Inventory updated successfully!')
+      toast({
+        variant: "success",
+        title: "Update Complete",
+        description: "Inventory updated successfully!",
+      })
     } catch (err: any) {
       console.error('Failed to update inventory:', err)
       setError(err.message || 'Failed to update inventory')
@@ -482,7 +496,11 @@ const Inventory = () => {
       // Reload inventory
       await loadInventory()
       
-      alert('Bulk update completed successfully!')
+      toast({
+        variant: "success",
+        title: "Bulk Update Complete",
+        description: "Bulk update completed successfully!",
+      })
     } catch (err: any) {
       console.error('Failed to bulk update inventory:', err)
       setError(err.message || 'Failed to bulk update inventory')

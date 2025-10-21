@@ -20,6 +20,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Search, Download, Plus, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Image as ImageIcon, Images, Building2, Package2, Filter, Edit, Trash2, Globe, FileText, Upload, Warehouse, Maximize2, Minimize2, Minus } from 'lucide-react'
 import { useAuth } from '../lib/auth'
+import { useToast } from '../lib/hooks/use-toast'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
@@ -80,6 +81,7 @@ interface Pagination {
 
 const Listings = () => {
   const { state } = useAuth()
+  const { toast } = useToast()
   
   // Helper function to proxy backend images through Next.js API
   const getProxiedImageUrl = (imageUrl: string | null | undefined): string | null => {
@@ -147,6 +149,11 @@ const Listings = () => {
   // Image upload state
   const [mainImageFile, setMainImageFile] = useState<File | null>(null)
   const [galleryImageFiles, setGalleryImageFiles] = useState<File[]>([])
+  
+  // Bulk images state
+  const [showBulkImagesModal, setShowBulkImagesModal] = useState(false)
+  const [bulkImagesFile, setBulkImagesFile] = useState<File | null>(null)
+  const [bulkImagesResults, setBulkImagesResults] = useState<any>(null)
   
   // Listing form state
   const [listingFormData, setListingFormData] = useState<{
@@ -369,6 +376,150 @@ const Listings = () => {
   const handleApplyFilters = () => {
     setPagination(prev => ({ ...prev, currentPage: 1 }))
     loadListings(1)
+  }
+  
+  // Bulk images handler
+  const handleBulkImages = () => {
+    setShowBulkImagesModal(true)
+    document.body.classList.add('modal-open')
+  }
+  
+  // Close bulk images modal
+  const handleCloseBulkImagesModal = () => {
+    setShowBulkImagesModal(false)
+    setBulkImagesFile(null)
+    setBulkImagesResults(null)
+    document.body.classList.remove('modal-open')
+  }
+  
+  // Download image template
+  const handleDownloadImageTemplate = async () => {
+    try {
+      setIsSubmitting(true)
+      
+      const response = await fetch('http://192.168.0.22:5000/api/listings/images/template', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${state.accessToken}`,
+          'Accept': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to download template: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      
+      // Convert JSON data to CSV for download
+      const { templateData, columns } = data
+      
+      if (!templateData || templateData.length === 0) {
+        throw new Error('No template data available')
+      }
+
+      // Create CSV content
+      const csvContent = [
+        columns.join(','), // Header row
+        ...templateData.map((row: any) => 
+          columns.map((col: string) => {
+            const value = row[col] || ''
+            // Escape commas and quotes in values
+            return `"${String(value).replace(/"/g, '""')}"`
+          }).join(',')
+        )
+      ].join('\n')
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `listings_image_template_${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Failed to download image template:', error)
+      toast({
+        variant: "destructive",
+        title: "Download Failed",
+        description: "Failed to download image template. Please try again.",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+  
+  // Upload bulk images
+  const handleBulkImagesUpload = async () => {
+    if (!bulkImagesFile) {
+      toast({
+        variant: "destructive",
+        title: "No File Selected",
+        description: "Please select a file to upload",
+      })
+      return
+    }
+    
+    try {
+      setIsSubmitting(true)
+      
+      const formData = new FormData()
+      formData.append('file', bulkImagesFile)
+
+      const response = await fetch('http://192.168.0.22:5000/api/listings/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${state.accessToken}`,
+        },
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to upload bulk images')
+      }
+
+      const result = await response.json()
+      setBulkImagesResults(result)
+      
+      // Show success toast
+      toast({
+        variant: "success",
+        title: "Upload Successful",
+        description: `Bulk images uploaded successfully! ${result.summary?.updated || result.summary?.totalProcessed || 0} listings processed.`,
+      })
+      
+      // Refresh listings list
+      await loadListings()
+    } catch (error) {
+      console.error('Failed to upload bulk images:', error)
+      
+      // Provide more specific error messages
+      let errorMessage = "Failed to upload bulk images. Please try again."
+      
+      if (error instanceof Error) {
+        if (error.message.includes('sku column')) {
+          errorMessage = "Excel file must contain a 'sku' column. Please download the template first to see the correct format."
+        } else if (error.message.includes('empty')) {
+          errorMessage = "Excel file is empty or contains no valid data. Please check your file."
+        } else if (error.message.includes('format')) {
+          errorMessage = "Invalid file format. Please use CSV or Excel files with the correct column structure."
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
+      toast({
+        variant: "destructive",
+        title: "Upload Failed",
+        description: errorMessage,
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
   
   const handleResetFilters = () => {
@@ -1224,6 +1375,7 @@ const Listings = () => {
                 onAddListing={() => handleOpenAddListing()}
                 onBulkAddListing={() => {/* TODO: Add bulk add functionality */}}
                 onImportListing={() => {/* TODO: Add import file functionality */}}
+                onBulkImagesListing={handleBulkImages}
               />
             </div>
           </div>
@@ -1656,6 +1808,169 @@ const Listings = () => {
         </div>
       </div>
 
+
+      {/* Bulk Images Modal */}
+      {showBulkImagesModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 w-full max-w-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-semibold text-gray-900 dark:text-slate-100">
+                Bulk Upload Listing Images
+              </h3>
+              <Button
+                onClick={handleCloseBulkImagesModal}
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            {/* File Requirements */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">File Requirements</h4>
+                  <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                    <li>• <strong>Supported formats:</strong> CSV, Excel (.xls, .xlsx), JSON</li>
+                    <li>• <strong>File size limit:</strong> Unlimited (background processing)</li>
+                    <li>• <strong>Required columns:</strong> sku, subSku, mainImageUrl, galleryImages</li>
+                    <li>• <strong>Gallery images:</strong> Comma-separated URLs</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Template Download */}
+            <div className="mb-4">
+              <Button
+                onClick={handleDownloadImageTemplate}
+                variant="outline"
+                size="sm"
+                className="text-indigo-600 hover:text-indigo-700"
+                disabled={isSubmitting}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download Template
+              </Button>
+            </div>
+
+            {/* File Upload */}
+            <div className="border-2 border-dashed dark:border-slate-600 rounded-lg p-6 text-center">
+              <input
+                type="file"
+                accept=".csv,.xls,.xlsx,.json"
+                onChange={(e) => setBulkImagesFile(e.target.files?.[0] || null)}
+                className="hidden"
+                id="bulk-images-file-upload"
+              />
+              <label
+                htmlFor="bulk-images-file-upload"
+                className="cursor-pointer flex flex-col items-center gap-2"
+              >
+                <Upload className="h-8 w-8 text-gray-400" />
+                <span className="text-gray-600 dark:text-slate-400">
+                  {bulkImagesFile ? bulkImagesFile.name : 'Click to select file or drag and drop'}
+                </span>
+                <span className="text-sm text-gray-500 dark:text-slate-500">
+                  CSV, Excel, JSON files
+                </span>
+              </label>
+            </div>
+
+            {/* Instructions */}
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">File Format Requirements:</h4>
+              <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                <li>• <strong>Required column:</strong> <code>sku</code> (must match existing listing SKUs)</li>
+                <li>• <strong>Optional columns:</strong> <code>mainImageUrl</code>, <code>galleryImages</code></li>
+                <li>• <strong>Gallery images:</strong> Separate multiple URLs with commas</li>
+                <li>• <strong>Supported formats:</strong> CSV, Excel (.xlsx, .xls)</li>
+              </ul>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                💡 <strong>Tip:</strong> Download the template first to see the correct format!
+              </p>
+            </div>
+
+            <div className="flex gap-2 justify-end mt-6">
+              <Button
+                onClick={handleCloseBulkImagesModal}
+                variant="outline"
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleBulkImagesUpload}
+                disabled={isSubmitting || !bulkImagesFile}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                {isSubmitting ? 'Uploading...' : 'Upload Images'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Bulk Images Results Modal */}
+      {bulkImagesResults && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
+                Bulk Images Upload Results
+              </h3>
+              <Button
+                onClick={() => setBulkImagesResults(null)}
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            {/* Summary */}
+            <div className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-4 mb-4">
+              <h4 className="font-medium text-gray-900 dark:text-slate-100 mb-2">Summary</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600 dark:text-slate-400">Total:</span>
+                  <span className="ml-1 font-medium">{bulkImagesResults.summary.totalProcessed}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600 dark:text-slate-400">Successful:</span>
+                  <span className="ml-1 font-medium text-green-600">{bulkImagesResults.summary.successful}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600 dark:text-slate-400">Failed:</span>
+                  <span className="ml-1 font-medium text-red-600">{bulkImagesResults.summary.failed}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600 dark:text-slate-400">Skipped:</span>
+                  <span className="ml-1 font-medium text-yellow-600">{bulkImagesResults.summary.skipped}</span>
+                </div>
+              </div>
+              {bulkImagesResults.jobId && (
+                <div className="mt-2 text-sm text-gray-600 dark:text-slate-400">
+                  <span className="font-medium">Job ID:</span> {bulkImagesResults.jobId}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={() => setBulkImagesResults(null)}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Listing Modal */}
       {showAddListingModal && (

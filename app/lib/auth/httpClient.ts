@@ -7,15 +7,13 @@
  */
 
 import { AuthApiError } from './api';
-
-// Base API configuration
-const API_BASE_URL = 'http://192.168.0.22:5000/api';
+import { API_CONFIG } from '../config/api.config';
 
 /**
  * HTTP Client with automatic cookie-based authentication
  */
 export class HttpClient {
-  private static baseURL = API_BASE_URL;
+  private static baseURL = API_CONFIG.BASE_URL;
 
   /**
    * Make an authenticated HTTP request with automatic token refresh on 401
@@ -125,7 +123,7 @@ export class HttpClient {
         const errorMessage = error?.error || error?.message || `HTTP error: ${response.statusText}` || 'Unknown error';
         const errorCode = error?.code?.toString() || response.status.toString();
         
-        // Suppress error logging for expected 404s on endpoints that don't exist yet
+        // Suppress error logging for expected errors
         const isExpected404 = response.status === 404 && (
           endpoint.includes('/products/categories') ||
           endpoint.includes('/products/brands') ||
@@ -136,7 +134,11 @@ export class HttpClient {
           endpoint.includes('/products/single-set-items')
         );
         
-        if (!isExpected404) {
+        // Suppress refresh token errors (expected when no refresh token cookie exists)
+        const isExpectedRefreshError = endpoint.includes('/auth/refresh') && 
+          (response.status === 401 || response.status === 403);
+        
+        if (!isExpected404 && !isExpectedRefreshError) {
           console.error('❌ API Error Response:', {
             status: response.status,
             statusText: response.statusText,

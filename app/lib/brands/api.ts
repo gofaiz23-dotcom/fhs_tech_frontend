@@ -3,15 +3,13 @@
  * 
  * This service handles all brand-related API calls including CRUD operations
  * and file uploads for bulk brand creation.
- * 
- * Base URL: http://192.168.0.22:5000/api
  */
 
 import { ensureValidToken } from '../auth/api';
+import { API_CONFIG, API_ENDPOINTS } from '../config/api.config';
+import type { Brand as CommonBrand } from '../types/common.types';
 
-// Base API configuration
-// const API_BASE_URL = 'http://192.168.0.22:5000/api';
-const API_BASE_URL = 'http://192.168.0.22:5000/api';
+const API_BASE_URL = API_CONFIG.BASE_URL;
 
 /**
  * Brand interface

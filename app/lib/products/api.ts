@@ -1,4 +1,8 @@
 import { HttpClient } from '../auth/httpClient';
+import type { Brand, Pagination } from '../types/common.types';
+
+// Re-export types for external use
+export type { Brand, Pagination } from '../types/common.types';
 
 export interface ProductAttributes {
   origin?: string;
@@ -21,12 +25,6 @@ export interface ProductAttributes {
   feature_7?: string;
   product_dimension_inch?: string;
   [key: string]: any; // Allow any additional attributes
-}
-
-export interface Brand {
-  id: number;
-  name: string;
-  description: string;
 }
 
 export interface Product {
@@ -56,15 +54,6 @@ export interface Product {
   brand: Brand;
 }
 
-export interface Pagination {
-  totalCount: number;
-  totalPages: number;
-  currentPage: number;
-  itemsPerPage: number;
-  hasNextPage: boolean;
-  hasPrevPage: boolean;
-}
-
 export interface ProductsResponse {
   products: Product[];
   pagination: Pagination;
@@ -83,6 +72,40 @@ export interface ProductsFilters {
   singleSetItem?: string;
   sortBy?: 'title' | 'groupSku' | 'subSku' | 'category' | 'collectionName' | 'shipTypes' | 'singleSetItem' | 'brandRealPrice' | 'brandMiscellaneous' | 'brandPrice' | 'msrp' | 'shippingPrice' | 'commissionPrice' | 'profitMarginPrice' | 'ecommerceMiscellaneous' | 'ecommercePrice' | 'createdAt' | 'updatedAt';
   sortOrder?: 'asc' | 'desc';
+}
+
+export interface ImageTemplateData {
+  groupSku: string;
+  subSku: string;
+  mainImageUrl: string;
+  galleryImages: string;
+}
+
+export interface ImageTemplateResponse {
+  message: string;
+  timestamp: string;
+  summary: {
+    totalProducts: number;
+    productsWithoutImages: number;
+    productsWithImages: number;
+  };
+  columns: string[];
+  imageBaseUrl: string;
+  templateData: ImageTemplateData[];
+}
+
+export interface BulkImageUploadResponse {
+  message: string;
+  timestamp: string;
+  processingMode: string;
+  summary: {
+    totalProcessed: number;
+    successful: number;
+    failed: number;
+    skipped: number;
+  };
+  results?: any[];
+  jobId?: string;
 }
 
 export class ProductsService {
@@ -237,6 +260,117 @@ export class ProductsService {
     } catch (error) {
       // Silently use fallback data - endpoint doesn't exist on backend yet
       return ['Single Item', 'Part', 'Set', 'Bundle'];
+    }
+  }
+
+  /**
+   * Get image template for bulk image upload
+   * Returns template with groupSku, subSku, mainImageUrl, galleryImages
+   */
+  static async getImageTemplate(accessToken: string): Promise<ImageTemplateResponse> {
+    console.log('🔍 Products API: Fetching image template...');
+    
+    const response = await HttpClient.get<ImageTemplateResponse>(
+      '/products/images/template',
+      {},
+      accessToken
+    );
+
+    console.log('✅ Products API: Image template retrieved successfully');
+    return response;
+  }
+
+  /**
+   * Download image template as Excel file
+   */
+  static async downloadImageTemplate(accessToken: string): Promise<void> {
+    console.log('📥 Products API: Downloading image template...');
+    
+    try {
+      const response = await fetch('http://192.168.0.22:5000/api/products/images/template', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to download template: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // Convert JSON data to CSV for download
+      const { templateData, columns } = data;
+      
+      if (!templateData || templateData.length === 0) {
+        throw new Error('No template data available');
+      }
+
+      // Create CSV content
+      const csvContent = [
+        columns.join(','), // Header row
+        ...templateData.map((row: ImageTemplateData) => 
+          columns.map((col: string) => {
+            const value = row[col as keyof ImageTemplateData] || '';
+            // Escape commas and quotes in values
+            return `"${String(value).replace(/"/g, '""')}"`;
+          }).join(',')
+        )
+      ].join('\n');
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `products_image_template_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      console.log('✅ Products API: Template downloaded successfully');
+    } catch (error) {
+      console.error('❌ Products API: Failed to download template:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Upload bulk images for products
+   * Accepts Excel/JSON file with image URLs
+   */
+  static async bulkUploadImages(
+    accessToken: string,
+    file: File
+  ): Promise<BulkImageUploadResponse> {
+    console.log('📤 Products API: Uploading bulk images...');
+    
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('http://192.168.0.22:5000/api/products/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to upload bulk images');
+      }
+
+      const data = await response.json();
+      console.log('✅ Products API: Bulk images uploaded successfully');
+      return data;
+    } catch (error) {
+      console.error('❌ Products API: Failed to upload bulk images:', error);
+      throw error;
     }
   }
 }

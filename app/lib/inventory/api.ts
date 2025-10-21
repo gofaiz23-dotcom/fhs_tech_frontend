@@ -1,9 +1,6 @@
 import { HttpClient } from '../auth/httpClient';
-
-export interface Brand {
-  id: number;
-  name: string;
-}
+import { API_CONFIG } from '../config/api.config';
+import type { Brand } from '../types/common.types';
 
 export interface Listing {
   id: number;
@@ -166,7 +163,7 @@ export class InventoryService {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('http://192.168.0.22:5000/api/inventory/bulk/inventory/updates', {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/inventory/bulk/inventory/updates`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
