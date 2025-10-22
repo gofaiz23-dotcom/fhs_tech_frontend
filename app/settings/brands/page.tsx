@@ -110,7 +110,7 @@ export default function BrandsPage() {
 
     try {
       setIsSubmitting(true);
-      await BrandsService.updateBrand(selectedBrand.id, formData, authState.accessToken);
+      await BrandsService.updateBrand(authState.accessToken, selectedBrand.id, formData);
       setShowEditModal(false);
       setSelectedBrand(null);
       setFormData({ name: '', description: '' });
