@@ -184,5 +184,41 @@ export class InventoryService {
       throw error;
     }
   }
+
+  /**
+   * Get bulk processing status
+   */
+  static async getBulkStatus(
+    accessToken: string,
+    jobId?: string
+  ): Promise<any> {
+    console.log('📊 Inventory API: Getting bulk status...');
+    
+    const endpoint = jobId ? `/inventory/status?jobId=${jobId}` : '/inventory/status';
+    const response = await HttpClient.get<any>(endpoint, {}, accessToken);
+
+    console.log('✅ Inventory API: Bulk status retrieved');
+    return response;
+  }
+
+  /**
+   * Cancel background job
+   */
+  static async cancelJob(
+    accessToken: string,
+    jobId: string
+  ): Promise<{ message: string; jobId: string; status: string }> {
+    console.log('❌ Inventory API: Cancelling job...');
+    
+    const response = await HttpClient.post<{ message: string; jobId: string; status: string }>(
+      `/inventory/status/${jobId}/cancel`,
+      {},
+      {},
+      accessToken
+    );
+
+    console.log('✅ Inventory API: Job cancelled successfully');
+    return response;
+  }
 }
 

@@ -32,20 +32,20 @@ export interface Product {
   brandId: number;
   title: string;
   groupSku: string;
-  subSku: string;
+  subSku: string | null;
   category: string;
   collectionName: string;
   shipTypes: string;
   singleSetItem: string;
-  brandRealPrice: string;
-  brandMiscellaneous: string;
-  brandPrice: string;
-  msrp: string;
-  shippingPrice: string;
-  commissionPrice: string;
-  profitMarginPrice: string;
-  ecommerceMiscellaneous: string;
-  ecommercePrice: string;
+  brandRealPrice: number;
+  brandMiscellaneous: number;
+  brandPrice: number;
+  msrp: number;
+  shippingPrice: number;
+  commissionPrice: number;
+  profitMarginPrice: number;
+  ecommerceMiscellaneous: number;
+  ecommercePrice: number;
   mainImageUrl: string | null;
   galleryImages: string[] | null;
   attributes: ProductAttributes;
@@ -372,5 +372,120 @@ export class ProductsService {
       console.error('❌ Products API: Failed to upload bulk images:', error);
       throw error;
     }
+  }
+
+  /**
+   * Create a new product
+   */
+  static async createProduct(
+    accessToken: string,
+    productData: Partial<Product>
+  ): Promise<{ message: string; product: Product; timestamp: string }> {
+    console.log('📝 Products API: Creating product...');
+    
+    const response = await HttpClient.post<{ message: string; product: Product; timestamp: string }>(
+      '/products',
+      productData,
+      {},
+      accessToken
+    );
+
+    console.log('✅ Products API: Product created successfully');
+    return response;
+  }
+
+  /**
+   * Update an existing product
+   */
+  static async updateProduct(
+    accessToken: string,
+    productId: number,
+    productData: Partial<Product>
+  ): Promise<{ message: string; product: Product; timestamp: string }> {
+    console.log('🔄 Products API: Updating product...');
+    
+    const response = await HttpClient.put<{ message: string; product: Product; timestamp: string }>(
+      `/products/${productId}`,
+      productData,
+      {},
+      accessToken
+    );
+
+    console.log('✅ Products API: Product updated successfully');
+    return response;
+  }
+
+  /**
+   * Delete a product
+   */
+  static async deleteProduct(
+    accessToken: string,
+    productId: number
+  ): Promise<{ message: string }> {
+    console.log('🗑️ Products API: Deleting product...');
+    
+    const response = await HttpClient.delete<{ message: string }>(
+      `/products/${productId}`,
+      {},
+      accessToken
+    );
+
+    console.log('✅ Products API: Product deleted successfully');
+    return response;
+  }
+
+  /**
+   * Get product by SKU
+   */
+  static async getProductBySku(
+    accessToken: string,
+    sku: string
+  ): Promise<{ message: string; product: Product; searchedSku: string }> {
+    console.log('🔍 Products API: Getting product by SKU...');
+    
+    const response = await HttpClient.get<{ message: string; product: Product; searchedSku: string }>(
+      `/products/sku/${sku}`,
+      {},
+      accessToken
+    );
+
+    console.log('✅ Products API: Product retrieved by SKU');
+    return response;
+  }
+
+  /**
+   * Get bulk processing status
+   */
+  static async getBulkStatus(
+    accessToken: string,
+    jobId?: string
+  ): Promise<any> {
+    console.log('📊 Products API: Getting bulk status...');
+    
+    const endpoint = jobId ? `/products/status?jobId=${jobId}` : '/products/status';
+    const response = await HttpClient.get<any>(endpoint, {}, accessToken);
+
+    console.log('✅ Products API: Bulk status retrieved');
+    return response;
+  }
+
+  /**
+   * Cancel background job
+   */
+  static async cancelJob(
+    accessToken: string,
+    jobId: string
+  ): Promise<{ message: string; jobId: string; status: string }> {
+    console.log('❌ Products API: Cancelling job...');
+    
+    const response = await HttpClient.post<{ message: string; jobId: string; status: string }>(
+      `/products/status/${jobId}/cancel`,
+      {},
+      {},
+      accessToken
+    );
+
+    console.log('✅ Products API: Job cancelled successfully');
+    return response;
   }
 }
