@@ -129,7 +129,7 @@ export default function BrandsPage() {
 
     try {
       setIsSubmitting(true);
-      await BrandsService.deleteBrand(selectedBrand.id, authState.accessToken);
+      await BrandsService.deleteBrand(authState.accessToken, selectedBrand.id);
       setShowDeleteModal(false);
       setSelectedBrand(null);
       loadBrands(); // Refresh the list
