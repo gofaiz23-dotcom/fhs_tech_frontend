@@ -91,7 +91,7 @@ export default function BrandsPage() {
 
     try {
       setIsSubmitting(true);
-      await BrandsService.createBrand(formData, authState.accessToken);
+      await BrandsService.createBrand(authState.accessToken, formData);
       setShowCreateModal(false);
       setFormData({ name: '', description: '' });
       loadBrands(); // Refresh the list
