@@ -59,7 +59,7 @@ interface Listing {
   quantity?: number
   status?: string
   inventoryArray?: number[]
-  brand?: string  // Custom brand name from settings (already mapped by backend)
+  customBrandName?: string  // Custom brand name from settings (already mapped by backend)
   createdAt: string
   updatedAt: string
 }
@@ -1606,7 +1606,7 @@ const Listings = () => {
                       {/* Brand Column - Shows custom brand name from settings */}
                       <TableCell className="text-center" style={{ width: `${getColumnWidth('brand', 200)}px`, minWidth: `${getColumnWidth('brand', 200)}px` }}>
                         <Badge variant="outline" className="bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 border-teal-300 dark:border-teal-700">
-                          {listing.brand || listing.brandName || '-'}
+                          {listing.customBrandName || listing.brandName || '-'}
                         </Badge>
                       </TableCell>
                       
@@ -2667,7 +2667,7 @@ const Listings = () => {
                         <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Brand</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 border-teal-300 dark:border-teal-700">
-                            {selectedListingInfo.brand || '-'}
+                            {selectedListingInfo.customBrandName || selectedListingInfo.brandName || '-'}
                           </Badge>
                         </TableCell>
                       </TableRow>

@@ -31,7 +31,7 @@ export interface Listing {
   quantity?: number;
   status?: string;
   inventoryArray?: number[];
-  brand?: string; // Custom brand name from settings
+  customBrandName?: string; // Custom brand name from settings
   createdAt: string;
   updatedAt: string;
   brand: Brand;
