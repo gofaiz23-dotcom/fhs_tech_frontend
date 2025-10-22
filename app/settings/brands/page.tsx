@@ -146,7 +146,7 @@ export default function BrandsPage() {
     setSelectedBrand(brand);
     setFormData({
       name: brand.name,
-      description: brand.description
+      description: brand.description || ''
     });
     setShowEditModal(true);
   };
