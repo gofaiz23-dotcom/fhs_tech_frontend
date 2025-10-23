@@ -968,6 +968,7 @@ const Products = () => {
         commissionPrice: product.commissionPrice || 0,
         profitMarginPrice: product.profitMarginPrice || 0,
         ecommerceMiscellaneous: product.ecommerceMiscellaneous || 0,
+        ecommercePrice: product.ecommercePrice || 0,
         mainImageUrl: product.mainImageUrl || '',
         galleryImages: product.galleryImages || [],
         attributes: {
@@ -1235,6 +1236,7 @@ const Products = () => {
             Sku: finalSku,
             subSku: selectedSubSkus || listing.subSkus.map((ss: any) => ss.sku).join(','),
             brandName: listing.brandName,
+            brandId: listing.brandId,
             title: listing.title,
             category: listing.category,
             collectionName: listing.collectionName,
@@ -1247,6 +1249,7 @@ const Products = () => {
             commissionPrice: listing.commissionPrice,
             profitMarginPrice: listing.profitMarginPrice,
             ecommerceMiscellaneous: listing.ecommerceMiscellaneous,
+            ecommercePrice: listing.ecommercePrice,
             mainImageUrl: listing.mainImageUrl,
             galleryImages: listing.galleryImages,
             attributes: listing.attributes
@@ -1304,6 +1307,7 @@ const Products = () => {
             Sku: finalSku,
             subSku: selectedSubSkus || listing.subSkus.map((ss: any) => ss.sku).join(','),
             brandName: listing.brandName,
+            brandId: listing.brandId,
             title: listing.title,
             category: listing.category,
             collectionName: listing.collectionName,
@@ -1316,6 +1320,7 @@ const Products = () => {
             commissionPrice: listing.commissionPrice,
             profitMarginPrice: listing.profitMarginPrice,
             ecommerceMiscellaneous: listing.ecommerceMiscellaneous,
+            ecommercePrice: listing.ecommercePrice,
             mainImageUrl: listing.mainImageUrl,
             galleryImages: listing.galleryImages,
             attributes: listing.attributes
@@ -1335,7 +1340,7 @@ const Products = () => {
           formData.append('collectionName', listing.collectionName)
           formData.append('shipTypes', listing.shipTypes)
           formData.append('singleSetItem', listing.singleSetItem)
-          formData.append('brandId', listing.brandId.toString())
+          formData.append('brandId', (listing as any).brandId.toString())
           formData.append('brandName', listing.brandName)
           formData.append('brandRealPrice', listing.brandRealPrice.toString())
           formData.append('brandMiscellaneous', listing.brandMiscellaneous.toString())
