@@ -35,7 +35,7 @@ import './table-scroll.css'
 interface Listing {
   id: number
   brandId: number
-  brandName?: string
+  brand?: string
   title: string
   sku: string
   subSku: string | null
@@ -59,7 +59,7 @@ interface Listing {
   quantity?: number
   status?: string
   inventoryArray?: number[]
-  customBrandName?: string  // Custom brand name from settings (already mapped by backend)
+  customBrand?: string  // Custom brand name from settings (already mapped by backend)
   createdAt: string
   updatedAt: string
 }
@@ -87,19 +87,30 @@ const Listings = () => {
   const getProxiedImageUrl = (imageUrl: string | null | undefined): string | null => {
     if (!imageUrl) return null
     
-    // Normalize the IP address to current backend IP
-    let normalizedUrl = imageUrl
-    if (imageUrl.includes('192.168.0.22:5000')) {
-      normalizedUrl = imageUrl.replace('192.168.0.22:5000', '192.168.0.22:5000')
+    // If it's already a full URL (contains http), check if it's a backend URL
+    if (imageUrl.startsWith('http')) {
+      // Normalize the IP address to localhost for development
+      let normalizedUrl = imageUrl
+      if (imageUrl.includes('192.168.0.22:5000') || imageUrl.includes('192.168.0.23:5000')) {
+        normalizedUrl = imageUrl.replace(/192\.168\.0\.(22|23):5000/, 'localhost:5000')
+      }
+      
+      // If it's a backend URL, proxy it
+      if (normalizedUrl.includes('localhost:5000') || normalizedUrl.includes('127.0.0.1:5000')) {
+        return `/api/image-proxy?url=${encodeURIComponent(normalizedUrl)}`
+      }
+      // For external URLs, return as-is
+      return imageUrl
     }
     
-    // If it's a backend URL, proxy it
-    if (normalizedUrl.startsWith('http://192.168.0.22:5000/uploads/')) {
-      return `/api/image-proxy?url=${encodeURIComponent(normalizedUrl)}`
+    // If it's a relative path (starts with /uploads/), convert to full backend URL
+    if (imageUrl.startsWith('/uploads/')) {
+      const fullBackendUrl = `http://localhost:5000${imageUrl}`
+      return `/api/image-proxy?url=${encodeURIComponent(fullBackendUrl)}`
     }
     
-    // Otherwise return as-is (for external URLs)
-    return normalizedUrl
+    // For other relative paths or unknown formats, return as-is
+    return imageUrl
   }
   
   // Helper function to safely format prices
@@ -275,7 +286,7 @@ const Listings = () => {
   // Load brands
   const loadBrands = async () => {
     try {
-      const response = await fetch('http://192.168.0.22:5000/api/brands', {
+      const response = await fetch('http://localhost:5000/api/brands', {
         headers: {
           'Authorization': `Bearer ${state.accessToken}`
         }
@@ -313,7 +324,7 @@ const Listings = () => {
       if (filters.minPrice) params.append('minPrice', filters.minPrice)
       if (filters.maxPrice) params.append('maxPrice', filters.maxPrice)
       
-      const url = `http://192.168.0.22:5000/api/listings?${params}`
+      const url = `http://localhost:5000/api/listings?${params}`
       console.log('📡 Loading listings from:', url)
       
       const response = await fetch(url, {
@@ -397,7 +408,7 @@ const Listings = () => {
     try {
       setIsSubmitting(true)
       
-      const response = await fetch('http://192.168.0.22:5000/api/listings/images/template', {
+      const response = await fetch('http://localhost:5000/api/listings/images/template', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -469,7 +480,7 @@ const Listings = () => {
       const formData = new FormData()
       formData.append('file', bulkImagesFile)
 
-      const response = await fetch('http://192.168.0.22:5000/api/listings/images', {
+      const response = await fetch('http://localhost:5000/api/listings/images', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -983,9 +994,9 @@ const Listings = () => {
       
       // Get brand name
       const selectedBrand = brands.find(b => b.id.toString() === listingFormData.brandId)
-      const brandName = selectedBrand?.name || ''
+      const brand = selectedBrand?.name || ''
       
-      if (!brandName) {
+      if (!brand) {
         setError('Invalid brand selected')
         setIsSubmitting(false)
         return
@@ -1056,7 +1067,7 @@ const Listings = () => {
         formData.append('sku', listingFormData.sku)
         formData.append('subSku', subSkuString)
         formData.append('brandId', listingFormData.brandId)
-        formData.append('brandName', brandName)
+        formData.append('brand', brand)
         formData.append('category', listingFormData.category || '')
         formData.append('collectionName', listingFormData.collectionName || '')
         formData.append('shipTypes', listingFormData.shipTypes || 'Standard Shipping')
@@ -1103,7 +1114,7 @@ const Listings = () => {
           }
         })
         
-        response = await fetch('http://192.168.0.22:5000/api/listings', {
+        response = await fetch('http://localhost:5000/api/listings', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${state.accessToken}`
@@ -1117,7 +1128,7 @@ const Listings = () => {
         const payload = {
           sku: listingFormData.sku,
           subSku: subSkuString,
-          brandName: brandName,
+          brand: brand,
           title: listingFormData.title,
           category: listingFormData.category,
           collectionName: listingFormData.collectionName || '',
@@ -1136,7 +1147,7 @@ const Listings = () => {
           attributes: attributesPayload
         }
         
-        response = await fetch('http://192.168.0.22:5000/api/listings', {
+        response = await fetch('http://localhost:5000/api/listings', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${state.accessToken}`,
@@ -1251,36 +1262,161 @@ const Listings = () => {
       
       const attributesPayload = JSON.parse(JSON.stringify(attributesTemp))
       
-      const payload = {
-        title: listingFormData.title,
-        sku: listingFormData.sku,
-        subSku: subSkuString,
-        category: listingFormData.category,
-        collectionName: listingFormData.collectionName,
-        shipTypes: listingFormData.shipTypes,
-        singleSetItem: listingFormData.singleSetItem,
-        attributes: attributesPayload
-      }
+      // Check if we have files to upload
+      const hasMainImageFile = mainImageFile !== null
+      const hasGalleryFiles = galleryImageFiles.length > 0
+      const useFormData = hasMainImageFile || hasGalleryFiles
       
-      const response = await fetch(`http://192.168.0.22:5000/api/listings/${selectedListing.id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${state.accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      })
+      console.log('🔍 Listing Update method check:')
+      console.log('  - Main image file:', hasMainImageFile ? mainImageFile?.name : 'None')
+      console.log('  - Gallery files:', hasGalleryFiles ? galleryImageFiles.length : 'None')
+      console.log('  - Using FormData:', useFormData)
+      
+      let response: Response
+      
+      if (useFormData) {
+        // ========= FormData Method (for file uploads) =========
+        console.log('🚀 Building FormData for listing update...')
+        const formData = new FormData()
+        
+        // Add all core fields
+        formData.append('title', listingFormData.title)
+        formData.append('sku', listingFormData.sku)
+        formData.append('subSku', subSkuString)
+        formData.append('category', listingFormData.category)
+        formData.append('collectionName', listingFormData.collectionName || '')
+        formData.append('shipTypes', listingFormData.shipTypes || 'Standard Shipping')
+        formData.append('singleSetItem', listingFormData.singleSetItem || 'Single Item')
+        formData.append('brandRealPrice', listingFormData.brandRealPrice || '0')
+        formData.append('brandMiscellaneous', listingFormData.brandMiscellaneous || '0')
+        formData.append('msrp', listingFormData.msrp || '0')
+        formData.append('shippingPrice', listingFormData.shippingPrice || '0')
+        formData.append('commissionPrice', listingFormData.commissionPrice || '0')
+        formData.append('profitMarginPrice', listingFormData.profitMarginPrice || '0')
+        formData.append('ecommerceMiscellaneous', listingFormData.ecommerceMiscellaneous || '0')
+        
+        // Add main image file - ONLY if uploaded
+        if (hasMainImageFile) {
+          formData.append('mainImageUrl', mainImageFile!)
+          console.log('📁 Main image: Uploading file -', mainImageFile!.name)
+        }
+        // If main image URL is provided (and no file), add it
+        else if (listingFormData.mainImageUrl && listingFormData.mainImageUrl.trim() !== '') {
+          formData.append('mainImageUrl', listingFormData.mainImageUrl)
+          console.log('🔗 Main image: URL provided -', listingFormData.mainImageUrl)
+        }
+        
+        // Add gallery image files - ONLY if uploaded
+        if (hasGalleryFiles) {
+          galleryImageFiles.forEach((file, index) => {
+            formData.append('galleryImages', file)
+            console.log(`📁 Gallery image ${index + 1}: Uploading file -`, file.name)
+          })
+        }
+        // If gallery URLs are provided (and no files), add them as indexed array
+        else {
+          const filteredGalleryImages = listingFormData.galleryImages.filter(url => url.trim() !== '')
+          if (filteredGalleryImages.length > 0) {
+            filteredGalleryImages.forEach((url, index) => {
+              formData.append(`galleryImages[${index}]`, url)
+            })
+            console.log('🔗 Gallery images: URLs provided -', filteredGalleryImages.length)
+          }
+        }
+        
+        // Add attributes as nested fields
+        Object.keys(attributesPayload).forEach((key) => {
+          const value = attributesPayload[key]
+          if (Array.isArray(value)) {
+            value.forEach((item, index) => {
+              formData.append(`attributes[${key}][${index}]`, String(item))
+            })
+          } else {
+            formData.append(`attributes[${key}]`, String(value))
+          }
+        })
+        
+        console.log('=== Sending FormData for Listing Update (multipart/form-data) ===')
+        console.log(`Files: ${hasMainImageFile ? '1 main' : '0 main'}, ${hasGalleryFiles ? galleryImageFiles.length : '0'} gallery`)
+        
+        response = await fetch(`http://localhost:5000/api/listings/${selectedListing.id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${state.accessToken}`,
+            // Don't set Content-Type for FormData - browser sets it automatically
+          },
+          body: formData
+        })
+      } else {
+        // ========= JSON Method (for URL-only submission) =========
+        const filteredGalleryImages = listingFormData.galleryImages.filter(url => url.trim() !== '')
+        
+        const payload = {
+          title: listingFormData.title,
+          sku: listingFormData.sku,
+          subSku: subSkuString,
+          category: listingFormData.category,
+          collectionName: listingFormData.collectionName,
+          shipTypes: listingFormData.shipTypes,
+          singleSetItem: listingFormData.singleSetItem,
+          brandRealPrice: parseFloat(listingFormData.brandRealPrice) || 0,
+          brandMiscellaneous: parseFloat(listingFormData.brandMiscellaneous) || 0,
+          msrp: parseFloat(listingFormData.msrp) || 0,
+          shippingPrice: parseFloat(listingFormData.shippingPrice) || 0,
+          commissionPrice: parseFloat(listingFormData.commissionPrice) || 0,
+          profitMarginPrice: parseFloat(listingFormData.profitMarginPrice) || 0,
+          ecommerceMiscellaneous: parseFloat(listingFormData.ecommerceMiscellaneous) || 0,
+          mainImageUrl: listingFormData.mainImageUrl || '',
+          galleryImages: filteredGalleryImages,
+          attributes: attributesPayload
+        }
+        
+        console.log('=== Sending JSON for Listing Update (application/json) ===')
+        console.log(`Main Image URL: ${payload.mainImageUrl ? '✓' : '✗'}`)
+        console.log(`Gallery URLs: ${filteredGalleryImages.length}`)
+        
+        response = await fetch(`http://localhost:5000/api/listings/${selectedListing.id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${state.accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        })
+      }
       
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to update listing')
+        let errorData: any = {}
+        try {
+          const text = await response.text()
+          console.error('Listing Update Error Response (raw):', text)
+          if (text) {
+            errorData = JSON.parse(text)
+          }
+        } catch (e) {
+          console.error('Could not parse listing update error response')
+        }
+        console.error('Listing Update Error Response (parsed):', errorData)
+        const errorMsg = errorData.message || errorData.error || errorData.msg || `Failed to update listing (${response.status}: ${response.statusText})`
+        const detailMsg = errorData.details ? ` - ${JSON.stringify(errorData.details)}` : ''
+        throw new Error(errorMsg + detailMsg)
       }
+      
+      const data = await response.json()
+      console.log('Listing updated successfully:', data)
+      console.log('Updated listing mainImageUrl:', data.listing?.mainImageUrl)
+      console.log('Updated listing galleryImages:', data.listing?.galleryImages)
       
       // Close modal and refresh
       handleCloseEditListing()
-      loadListings(pagination.currentPage)
+      
+      // Add a small delay to ensure backend has processed the update
+      setTimeout(() => {
+        loadListings(pagination.currentPage)
+      }, 500)
       
     } catch (err: any) {
+      console.error('Failed to update listing:', err)
       setError(err.message || 'Failed to update listing')
     } finally {
       setIsSubmitting(false)
@@ -1300,7 +1436,7 @@ const Listings = () => {
       setIsDeleting(true)
       setError(null)
       
-      const response = await fetch(`http://192.168.0.22:5000/api/listings/${selectedListing.id}`, {
+      const response = await fetch(`http://localhost:5000/api/listings/${selectedListing.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`
@@ -1606,7 +1742,7 @@ const Listings = () => {
                       {/* Brand Column - Shows custom brand name from settings */}
                       <TableCell className="text-center" style={{ width: `${getColumnWidth('brand', 200)}px`, minWidth: `${getColumnWidth('brand', 200)}px` }}>
                         <Badge variant="outline" className="bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 border-teal-300 dark:border-teal-700">
-                          {listing.customBrandName || listing.brandName || '-'}
+                          {listing.customBrand || listing.brand || '-'}
                         </Badge>
                       </TableCell>
                       
@@ -2408,43 +2544,88 @@ const Listings = () => {
             </div>
             
             <form onSubmit={handleUpdateListing} className="p-6 space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Basic Information</h3>
+              {/* Basic Information */}
+              <div className="border dark:border-slate-700 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-slate-100">Basic Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Title</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">
+                      Title <span className="text-red-500">*</span>
+                    </label>
                     <Input
                       value={listingFormData.title}
                       onChange={(e) => setListingFormData({...listingFormData, title: e.target.value})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                      required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">SKU</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">
+                      SKU <span className="text-red-500">*</span>
+                    </label>
                     <Input
                       value={listingFormData.sku}
                       onChange={(e) => setListingFormData({...listingFormData, sku: e.target.value})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                      required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Category</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">
+                      Category <span className="text-red-500">*</span>
+                    </label>
                     <Input
                       value={listingFormData.category}
                       onChange={(e) => setListingFormData({...listingFormData, category: e.target.value})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                      required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Collection Name</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">
+                      Collection Name
+                    </label>
                     <Input
                       value={listingFormData.collectionName}
                       onChange={(e) => setListingFormData({...listingFormData, collectionName: e.target.value})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">
+                      Ship Types
+                    </label>
+                    <Input
+                      value={listingFormData.shipTypes}
+                      onChange={(e) => setListingFormData({...listingFormData, shipTypes: e.target.value})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                      placeholder="Standard Shipping"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">
+                      Single/Set Item
+                    </label>
+                    <Select
+                      value={listingFormData.singleSetItem}
+                      onValueChange={(value) => setListingFormData({...listingFormData, singleSetItem: value})}
+                    >
+                      <SelectTrigger className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Single Item">Single Item</SelectItem>
+                        <SelectItem value="Set">Set</SelectItem>
+                        <SelectItem value="Part">Part</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
 
               {/* Sub SKUs */}
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Sub SKUs</h3>
+              <div className="border dark:border-slate-700 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-slate-100">Sub SKUs</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Edit sub SKUs with their respective quantities</p>
                 <div className="flex gap-2 mb-2">
                   <div className="flex-1">
@@ -2466,6 +2647,7 @@ const Listings = () => {
                           setSubSkus(newSkus)
                         }}
                         placeholder={`Sub SKU ${index + 1}`}
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
                       />
                     </div>
                     <div className="w-32 flex items-center gap-1">
@@ -2525,6 +2707,312 @@ const Listings = () => {
                   <Plus className="w-4 h-4 mr-2" />
                   Add Sub SKU
                 </Button>
+              </div>
+
+              {/* Pricing Information */}
+              <div className="border dark:border-slate-700 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-slate-100">Pricing Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">
+                      Brand Real Price <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={listingFormData.brandRealPrice}
+                      onChange={(e) => setListingFormData({...listingFormData, brandRealPrice: e.target.value})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">
+                      Brand Miscellaneous
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={listingFormData.brandMiscellaneous}
+                      onChange={(e) => setListingFormData({...listingFormData, brandMiscellaneous: e.target.value})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">
+                      MSRP <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={listingFormData.msrp}
+                      onChange={(e) => setListingFormData({...listingFormData, msrp: e.target.value})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">
+                      Shipping Price
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={listingFormData.shippingPrice}
+                      onChange={(e) => setListingFormData({...listingFormData, shippingPrice: e.target.value})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">
+                      Commission Price
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={listingFormData.commissionPrice}
+                      onChange={(e) => setListingFormData({...listingFormData, commissionPrice: e.target.value})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">
+                      Profit Margin
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={listingFormData.profitMarginPrice}
+                      onChange={(e) => setListingFormData({...listingFormData, profitMarginPrice: e.target.value})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">
+                      Ecommerce Miscellaneous
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={listingFormData.ecommerceMiscellaneous}
+                      onChange={(e) => setListingFormData({...listingFormData, ecommerceMiscellaneous: e.target.value})}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Product Attributes */}
+              <div className="border dark:border-slate-700 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-slate-100">Product Attributes</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">Origin</label>
+                    <Input
+                      type="text"
+                      value={listingFormData.attributes.origin}
+                      onChange={(e) => setListingFormData({
+                        ...listingFormData,
+                        attributes: {...listingFormData.attributes, origin: e.target.value}
+                      })}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">Style</label>
+                    <Input
+                      type="text"
+                      value={listingFormData.attributes.style}
+                      onChange={(e) => setListingFormData({
+                        ...listingFormData,
+                        attributes: {...listingFormData.attributes, style: e.target.value}
+                      })}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">Material</label>
+                    <Input
+                      type="text"
+                      value={listingFormData.attributes.material}
+                      onChange={(e) => setListingFormData({
+                        ...listingFormData,
+                        attributes: {...listingFormData.attributes, material: e.target.value}
+                      })}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">Color</label>
+                    <Input
+                      type="text"
+                      value={listingFormData.attributes.color}
+                      onChange={(e) => setListingFormData({
+                        ...listingFormData,
+                        attributes: {...listingFormData.attributes, color: e.target.value}
+                      })}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">Sub Category</label>
+                    <Input
+                      type="text"
+                      value={listingFormData.attributes.sub_category}
+                      onChange={(e) => setListingFormData({
+                        ...listingFormData,
+                        attributes: {...listingFormData.attributes, sub_category: e.target.value}
+                      })}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">Short Description</label>
+                    <Input
+                      type="text"
+                      value={listingFormData.attributes.short_description}
+                      onChange={(e) => setListingFormData({
+                        ...listingFormData,
+                        attributes: {...listingFormData.attributes, short_description: e.target.value}
+                      })}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-slate-300">Product Dimension</label>
+                    <Input
+                      type="text"
+                      value={listingFormData.attributes.product_dimension_inch}
+                      onChange={(e) => setListingFormData({
+                        ...listingFormData,
+                        attributes: {...listingFormData.attributes, product_dimension_inch: e.target.value}
+                      })}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Image Upload */}
+              <div className="border dark:border-slate-700 rounded-lg p-4">
+                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-slate-100">Images</h3>
+                
+                {/* Main Image */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-slate-300">
+                    Main Image
+                  </label>
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <Input
+                        type="url"
+                        value={listingFormData.mainImageUrl}
+                        onChange={(e) => setListingFormData({...listingFormData, mainImageUrl: e.target.value})}
+                        placeholder="Enter image URL"
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                      />
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400 self-center">OR</div>
+                    <div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            setMainImageFile(file)
+                            setListingFormData({...listingFormData, mainImageUrl: ''})
+                          }
+                        }}
+                        className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-slate-700 dark:file:text-slate-300"
+                      />
+                    </div>
+                  </div>
+                  {mainImageFile && (
+                    <div className="mt-2 text-sm text-green-600 dark:text-green-400">
+                      Selected file: {mainImageFile.name}
+                    </div>
+                  )}
+                </div>
+
+                {/* Gallery Images */}
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-slate-300">
+                    Gallery Images
+                  </label>
+                  <div className="space-y-3">
+                    {listingFormData.galleryImages.map((url, index) => (
+                      <div key={index} className="flex gap-2">
+                        <Input
+                          type="url"
+                          value={url}
+                          onChange={(e) => {
+                            const newUrls = [...listingFormData.galleryImages]
+                            newUrls[index] = e.target.value
+                            setListingFormData({...listingFormData, galleryImages: newUrls})
+                          }}
+                          placeholder={`Gallery image ${index + 1} URL`}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        />
+                        {index > 0 && (
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              const newUrls = listingFormData.galleryImages.filter((_, i) => i !== index)
+                              setListingFormData({...listingFormData, galleryImages: newUrls})
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="px-3"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      onClick={() => setListingFormData({
+                        ...listingFormData,
+                        galleryImages: [...listingFormData.galleryImages, '']
+                      })}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Gallery Image URL
+                    </Button>
+                  </div>
+                  
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-slate-300">
+                      Or upload gallery images
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || [])
+                        setGalleryImageFiles(files)
+                        setListingFormData({...listingFormData, galleryImages: ['']})
+                      }}
+                      className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-slate-700 dark:file:text-slate-300"
+                    />
+                    {galleryImageFiles.length > 0 && (
+                      <div className="mt-2 text-sm text-green-600 dark:text-green-400">
+                        Selected {galleryImageFiles.length} file(s)
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {error && (
@@ -2667,7 +3155,7 @@ const Listings = () => {
                         <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Brand</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 border-teal-300 dark:border-teal-700">
-                            {selectedListingInfo.customBrandName || selectedListingInfo.brandName || '-'}
+                            {selectedListingInfo.customBrand || selectedListingInfo.brand || '-'}
                           </Badge>
                         </TableCell>
                       </TableRow>

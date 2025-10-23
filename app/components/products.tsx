@@ -5,17 +5,17 @@
  * 
  * API Communication Policy:
  * ========================
- * ALL product data is sent as JSON (application/json), NOT FormData
+ * Product data is sent as FormData when files are uploaded, JSON when only URLs are provided
  * 
- * - Create Product: JSON with base64-encoded images or URLs
- * - Update Product: JSON with base64-encoded images or URLs  
- * - Bulk Create: JSON array with base64-encoded images or URLs
- * - File Import: FormData (EXCEPTION - CSV/Excel file upload only)
+ * - Create Product: FormData with files OR JSON with URLs
+ * - Update Product: FormData with files OR JSON with URLs
+ * - Bulk Create: JSON array with URLs only
+ * - File Import: FormData (CSV/Excel file upload only)
  * 
  * Image Handling:
- * - If user provides URL: Send URL as-is
- * - If user uploads file: Convert to base64 and send in JSON
- * - Preview uses blob URLs (not base64) for better performance
+ * - If user uploads file: Send as FormData (multipart/form-data)
+ * - If user provides URL: Send as JSON (application/json)
+ * - Preview uses blob URLs for better performance
  */
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
@@ -24,6 +24,7 @@ import { useAuth } from '../lib/auth'
 import { ProductsService, type Product, type ProductsFilters, type Brand, type ProductAttributes } from '../lib/products/api'
 import { BrandsService } from '../lib/brands/api'
 import { useToast } from '../lib/hooks/use-toast'
+import { API_CONFIG } from '../lib/config/api.config'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
@@ -41,25 +42,27 @@ const Products = () => {
   const { toast } = useToast()
   
   // Helper function to proxy backend images through Next.js API
-  const getProxiedImageUrl = (imageUrl: string | null | undefined): string | null => {
+  const getImageUrl = (imageUrl: string | null | undefined): string | null => {
     if (!imageUrl || typeof imageUrl !== 'string') return null
     
-    // Normalize the IP address to current backend IP
-    let normalizedUrl = imageUrl
-    if (imageUrl.includes('192.168.0.22:5000')) {
-      normalizedUrl = imageUrl.replace('192.168.0.22:5000', '192.168.0.22:5000')
+    // If it's already a full URL (contains http), check if it's a backend URL
+    if (imageUrl.startsWith('http')) {
+      // If it's a backend URL, proxy it through Next.js API to avoid CORS issues
+      if (imageUrl.includes('localhost:5000') || imageUrl.includes('127.0.0.1:5000')) {
+        return `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`
+      }
+      // For external URLs, return as-is
+      return imageUrl
     }
     
-    // Ensure normalizedUrl is still a string after processing
-    if (typeof normalizedUrl !== 'string') return null
-    
-    // If it's a backend URL, proxy it
-    if (normalizedUrl.startsWith('http://192.168.0.22:5000/uploads/')) {
-      return `/api/image-proxy?url=${encodeURIComponent(normalizedUrl)}`
+    // If it's a relative path (starts with /uploads/), convert to full backend URL
+    if (imageUrl.startsWith('/uploads/')) {
+      const fullBackendUrl = `http://localhost:5000${imageUrl}`
+      return `/api/image-proxy?url=${encodeURIComponent(fullBackendUrl)}`
     }
     
-    // Otherwise return as-is (for external URLs)
-    return normalizedUrl
+    // For other relative paths or unknown formats, return as-is
+    return imageUrl
   }
   
   // State management
@@ -167,6 +170,10 @@ const Products = () => {
   // File upload state
   const [mainImageFile, setMainImageFile] = useState<File | null>(null)
   const [galleryImageFiles, setGalleryImageFiles] = useState<File[]>([])
+  
+  // Bulk form file upload state
+  const [bulkMainImageFiles, setBulkMainImageFiles] = useState<{[key: number]: File | null}>({})
+  const [bulkGalleryImageFiles, setBulkGalleryImageFiles] = useState<{[key: number]: File[]}>({})
   
   // Bulk and import modals state
   const [showBulkModal, setShowBulkModal] = useState(false)
@@ -1258,7 +1265,7 @@ const Products = () => {
         })
         
         // Send to API with FormData
-        const response = await fetch('http://192.168.0.22:5000/api/listings', {
+         const response = await fetch(`${API_CONFIG.BASE_URL}/listings`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${state.accessToken}`
@@ -1318,7 +1325,7 @@ const Products = () => {
         const finalPayload = payload.length === 1 ? payload[0] : { listings: payload }
         
         // Send to API with JSON
-        const response = await fetch('http://192.168.0.22:5000/api/listings', {
+         const response = await fetch(`${API_CONFIG.BASE_URL}/listings`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1618,10 +1625,10 @@ const Products = () => {
           }
         })
         console.log('🌐 Content-Type: multipart/form-data (set automatically by browser)')
-        console.log('🚀 About to send FormData request to: http://192.168.0.22:5000/api/products')
+        console.log('🚀 About to send FormData request to: http://localhost:5000/api/products')
         
         try {
-          response = await fetch('http://192.168.0.22:5000/api/products', {
+          response = await fetch(`${API_CONFIG.BASE_URL}/products`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${state.accessToken}`,
@@ -1665,7 +1672,7 @@ const Products = () => {
         console.log(`Gallery URLs: ${filteredGalleryImages.length}`)
         console.log('Backend will download these URLs')
         
-        response = await fetch('http://192.168.0.22:5000/api/products', {
+        response = await fetch(`${API_CONFIG.BASE_URL}/products`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -1784,6 +1791,72 @@ const Products = () => {
     
     setError(null)
   }
+
+  // Handle bulk main image file selection
+  const handleBulkMainImageSelect = async (e: React.ChangeEvent<HTMLInputElement>, formId: number) => {
+    const file = e.target.files?.[0]
+    console.log('📁 Bulk file input changed for form', formId, 'files:', e.target.files)
+    
+    if (file) {
+      console.log('📁 Processing bulk file:', file.name, file.type, file.size, 'bytes')
+      
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setError('Please select a valid image file')
+        console.error('❌ Invalid file type:', file.name, file.type)
+        return
+      }
+      
+      // Validate file size
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Image size must be less than 5MB')
+        console.error('❌ File too large:', file.size, 'bytes')
+        return
+      }
+      
+      setBulkMainImageFiles({...bulkMainImageFiles, [formId]: file})
+      // Clear the URL input when file is selected
+      updateBulkFormData(formId, 'mainImageUrl', '')
+      
+      console.log('✅ Bulk main image file selected for form', formId, ':', file.name, `(${(file.size / 1024).toFixed(1)} KB, ${file.type})`)
+      setError(null)
+    } else {
+      console.warn('⚠️ No bulk file selected for form', formId)
+    }
+  }
+
+  // Handle bulk gallery images selection
+  const handleBulkGalleryImagesSelect = async (e: React.ChangeEvent<HTMLInputElement>, formId: number) => {
+    const files = Array.from(e.target.files || [])
+    
+    if (files.length > 0) {
+      console.log('📁 Processing bulk gallery files for form', formId, ':', files.length)
+      
+      // Validate all files
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) {
+          setError('Please select valid image files only')
+          console.error('❌ Invalid file type:', file.name, file.type)
+          return
+        }
+        
+        if (file.size > 5 * 1024 * 1024) {
+          setError('Image size must be less than 5MB')
+          console.error('❌ File too large:', file.name, file.size, 'bytes')
+          return
+        }
+      }
+      
+      setBulkGalleryImageFiles({...bulkGalleryImageFiles, [formId]: files})
+      // Clear the URL inputs when files are selected
+      updateBulkFormData(formId, 'galleryImages', [''])
+      
+      console.log('✅ Bulk gallery images selected for form', formId, ':', files.map(f => f.name).join(', '))
+      setError(null)
+    } else {
+      console.warn('⚠️ No bulk gallery files selected for form', formId)
+    }
+  }
   
   // Close bulk modal
   const handleCloseBulkModal = () => {
@@ -1791,6 +1864,8 @@ const Products = () => {
     setBulkProducts([])
     setBulkForms([])
     setBulkFormIdCounter(0)
+    setBulkMainImageFiles({})
+    setBulkGalleryImageFiles({})
     document.body.classList.remove('modal-open')
   }
   
@@ -1868,36 +1943,103 @@ const Products = () => {
             }
           })
           
-          // Prepare JSON payload
-          const payload = {
-            groupSku: form.data.groupSku,
-            subSku: subSkuString,
-            brandName: brandName,
-            title: form.data.title,
-            category: form.data.category,
-            collectionName: form.data.collectionName,
-            shipTypes: form.data.shipTypes || '',
-            singleSetItem: form.data.singleSetItem,
-            brandRealPrice: parseFloat(form.data.brandRealPrice) || 0,
-            brandMiscellaneous: parseFloat(form.data.brandMiscellaneous) || 0,
-            msrp: parseFloat(form.data.msrp) || 0,
-            shippingPrice: parseFloat(form.data.shippingPrice) || 0,
-            commissionPrice: parseFloat(form.data.commissionPrice) || 0,
-            profitMarginPrice: parseFloat(form.data.profitMarginPrice) || 0,
-            ecommerceMiscellaneous: parseFloat(form.data.ecommerceMiscellaneous) || 0,
-            mainImageUrl: form.data.mainImageUrl || '',
-            galleryImages: form.data.galleryImages?.filter((url: string) => url.trim() !== '') || [],
-            attributes: attributesTemp
-          }
+          // Check if we have files to upload for this form
+          const hasMainImageFile = bulkMainImageFiles[form.id] !== null
+          const hasGalleryFiles = bulkGalleryImageFiles[form.id] && bulkGalleryImageFiles[form.id].length > 0
+          const useFormData = hasMainImageFile || hasGalleryFiles
           
-          const response = await fetch('http://192.168.0.22:5000/api/products', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${state.accessToken}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-          })
+          let response: Response
+          
+          if (useFormData) {
+            // ========= FormData Method (for file uploads) =========
+            const formData = new FormData()
+            
+            // Add all text fields
+            formData.append('groupSku', form.data.groupSku)
+            formData.append('subSku', subSkuString)
+            formData.append('brandName', brandName)
+            formData.append('title', form.data.title)
+            formData.append('category', form.data.category)
+            formData.append('collectionName', form.data.collectionName)
+            formData.append('shipTypes', form.data.shipTypes || '')
+            formData.append('singleSetItem', form.data.singleSetItem)
+            formData.append('brandRealPrice', form.data.brandRealPrice || '0')
+            formData.append('brandMiscellaneous', form.data.brandMiscellaneous || '0')
+            formData.append('msrp', form.data.msrp || '0')
+            formData.append('shippingPrice', form.data.shippingPrice || '0')
+            formData.append('commissionPrice', form.data.commissionPrice || '0')
+            formData.append('profitMarginPrice', form.data.profitMarginPrice || '0')
+            formData.append('ecommerceMiscellaneous', form.data.ecommerceMiscellaneous || '0')
+            
+            // Add main image file - ONLY if uploaded
+            if (hasMainImageFile) {
+              formData.append('mainImageUrl', bulkMainImageFiles[form.id]!)
+            }
+            // If main image URL is provided (and no file), add it
+            else if (form.data.mainImageUrl && form.data.mainImageUrl.trim() !== '') {
+              formData.append('mainImageUrl', form.data.mainImageUrl)
+            }
+            
+            // Add gallery image files - ONLY if uploaded
+            if (hasGalleryFiles) {
+              bulkGalleryImageFiles[form.id]!.forEach((file, index) => {
+                formData.append('galleryImages', file)
+              })
+            }
+            // If gallery URLs are provided (and no files), add them as indexed array
+            else {
+              const filteredGalleryImages = form.data.galleryImages?.filter((url: string) => url.trim() !== '') || []
+              if (filteredGalleryImages.length > 0) {
+                filteredGalleryImages.forEach((url, index) => {
+                  formData.append(`galleryImages[${index}]`, url)
+                })
+              }
+            }
+            
+            // Add attributes as JSON string
+            formData.append('attributes', JSON.stringify(attributesTemp))
+            
+            response = await fetch(`${API_CONFIG.BASE_URL}/products`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${state.accessToken}`
+              },
+              body: formData
+            })
+          } else {
+            // ========= JSON Method (for URL-only submission) =========
+            const filteredGalleryImages = form.data.galleryImages?.filter((url: string) => url.trim() !== '') || []
+            
+            const payload = {
+              groupSku: form.data.groupSku,
+              subSku: subSkuString,
+              brandName: brandName,
+              title: form.data.title,
+              category: form.data.category,
+              collectionName: form.data.collectionName,
+              shipTypes: form.data.shipTypes || '',
+              singleSetItem: form.data.singleSetItem,
+              brandRealPrice: parseFloat(form.data.brandRealPrice) || 0,
+              brandMiscellaneous: parseFloat(form.data.brandMiscellaneous) || 0,
+              msrp: parseFloat(form.data.msrp) || 0,
+              shippingPrice: parseFloat(form.data.shippingPrice) || 0,
+              commissionPrice: parseFloat(form.data.commissionPrice) || 0,
+              profitMarginPrice: parseFloat(form.data.profitMarginPrice) || 0,
+              ecommerceMiscellaneous: parseFloat(form.data.ecommerceMiscellaneous) || 0,
+              mainImageUrl: form.data.mainImageUrl || '',
+              galleryImages: filteredGalleryImages,
+              attributes: attributesTemp
+            }
+            
+            response = await fetch(`${API_CONFIG.BASE_URL}/products`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${state.accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(payload)
+            })
+          }
           
           if (response.ok) {
             const data = await response.json()
@@ -1946,7 +2088,7 @@ const Products = () => {
       
       console.log('📁 Importing file:', importFile.name)
       
-      const response = await fetch('http://192.168.0.22:5000/api/products/import', {
+       const response = await fetch(`${API_CONFIG.BASE_URL}/products/import`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -2110,7 +2252,7 @@ const Products = () => {
     
     try {
       // Call API to create new brand
-      const response = await fetch('http://192.168.0.22:5000/api/brands', {
+       const response = await fetch(`${API_CONFIG.BASE_URL}/brands`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2278,78 +2420,131 @@ const Products = () => {
         }
       })
       
-      // Convert files to base64 if needed (same as create)
-      let mainImageToSend = ''
-      let galleryImagesToSend: string[] = []
+      // Check if we have files to upload
+      const hasMainImageFile = mainImageFile !== null
+      const hasGalleryFiles = galleryImageFiles.length > 0
+      // Force JSON approach to avoid brandId type issues with FormData
+      const useFormData = false // hasMainImageFile || hasGalleryFiles
       
-      // Handle main image
-      if (mainImageFile) {
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader()
-          reader.onloadend = () => resolve(reader.result as string)
-          reader.readAsDataURL(mainImageFile)
-        })
-        mainImageToSend = base64
-        console.log('📁 Main image: Uploaded file converted to base64')
-      } else if (productFormData.mainImageUrl && !productFormData.mainImageUrl.startsWith('blob:')) {
-        mainImageToSend = productFormData.mainImageUrl
-        console.log('🔗 Main image: Using provided URL')
-      }
+      console.log('🔍 Update method check:')
+      console.log('  - Main image file:', hasMainImageFile ? mainImageFile?.name : 'None')
+      console.log('  - Gallery files:', hasGalleryFiles ? galleryImageFiles.length : 'None')
+      console.log('  - Using FormData:', useFormData)
       
-      // Handle gallery images
-      if (galleryImageFiles.length > 0) {
-        for (const file of galleryImageFiles) {
-          const base64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve(reader.result as string)
-            reader.readAsDataURL(file)
-          })
-          galleryImagesToSend.push(base64)
-        }
-        console.log(`📁 Gallery images: ${galleryImageFiles.length} uploaded file(s) converted to base64`)
-      } else {
-        galleryImagesToSend = productFormData.galleryImages.filter(url => url.trim() !== '' && !url.startsWith('blob:'))
-        if (galleryImagesToSend.length > 0) {
-          console.log(`🔗 Gallery images: ${galleryImagesToSend.length} URL(s)`)
-        }
-      }
+      let response: Response
       
-      // Prepare the payload
-      const payload = {
-        groupSku: productFormData.groupSku,
-        subSku: subSkuString,
-        brandName: brandName,
-        title: productFormData.title,
-        category: productFormData.category,
-        collectionName: productFormData.collectionName,
+      if (useFormData) {
+        // ========= FormData Method (for file uploads) =========
+        console.log('🚀 Building FormData for update...')
+        const formData = new FormData()
         
-        singleSetItem: productFormData.singleSetItem,
-        brandRealPrice: parseFloat(productFormData.brandRealPrice) || 0,
-        brandMiscellaneous: parseFloat(productFormData.brandMiscellaneous) || 0,
-        msrp: parseFloat(productFormData.msrp) || 0,
-        shippingPrice: parseFloat(productFormData.shippingPrice) || 0,
-        commissionPrice: parseFloat(productFormData.commissionPrice) || 0,
-        profitMarginPrice: parseFloat(productFormData.profitMarginPrice) || 0,
-        ecommerceMiscellaneous: parseFloat(productFormData.ecommerceMiscellaneous) || 0,
-        mainImageUrl: mainImageToSend,
-        galleryImages: galleryImagesToSend,
-        attributes: attributesPayload
+        // Add all core fields
+        formData.append('title', productFormData.title)
+        formData.append('groupSku', productFormData.groupSku)
+        formData.append('subSku', subSkuString)
+        formData.append('brandId', parseInt(productFormData.brandId).toString())
+        formData.append('category', productFormData.category)
+        formData.append('collectionName', productFormData.collectionName || '')
+        formData.append('shipTypes', productFormData.shipTypes || 'Standard Shipping')
+        formData.append('singleSetItem', productFormData.singleSetItem || 'Single Item')
+        formData.append('brandRealPrice', productFormData.brandRealPrice || '0')
+        formData.append('brandMiscellaneous', productFormData.brandMiscellaneous || '0')
+        formData.append('msrp', productFormData.msrp || '0')
+        formData.append('shippingPrice', productFormData.shippingPrice || '0')
+        formData.append('commissionPrice', productFormData.commissionPrice || '0')
+        formData.append('profitMarginPrice', productFormData.profitMarginPrice || '0')
+        formData.append('ecommerceMiscellaneous', productFormData.ecommerceMiscellaneous || '0')
+        
+        // Add main image file - ONLY if uploaded
+        if (hasMainImageFile) {
+          formData.append('mainImageUrl', mainImageFile!)
+          console.log('📁 Main image: Uploading file -', mainImageFile!.name)
+        }
+        // If main image URL is provided (and no file), add it
+        else if (productFormData.mainImageUrl && productFormData.mainImageUrl.trim() !== '') {
+          formData.append('mainImageUrl', productFormData.mainImageUrl)
+          console.log('🔗 Main image: URL provided -', productFormData.mainImageUrl)
+        }
+        
+        // Add gallery image files - ONLY if uploaded
+        if (hasGalleryFiles) {
+          galleryImageFiles.forEach((file, index) => {
+            formData.append('galleryImages', file)
+            console.log(`📁 Gallery image ${index + 1}: Uploading file -`, file.name)
+          })
+        }
+        // If gallery URLs are provided (and no files), add them as indexed array
+        else {
+          const filteredGalleryImages = productFormData.galleryImages.filter(url => url.trim() !== '')
+          if (filteredGalleryImages.length > 0) {
+            filteredGalleryImages.forEach((url, index) => {
+              formData.append(`galleryImages[${index}]`, url)
+            })
+            console.log('🔗 Gallery images: URLs provided -', filteredGalleryImages.length)
+          }
+        }
+        
+        // Add attributes as nested fields
+        Object.keys(attributesPayload).forEach((key) => {
+          const value = attributesPayload[key]
+          if (Array.isArray(value)) {
+            value.forEach((item, index) => {
+              formData.append(`attributes[${key}][${index}]`, String(item))
+            })
+          } else {
+            formData.append(`attributes[${key}]`, String(value))
+          }
+        })
+        
+        console.log('=== Sending FormData for Update (multipart/form-data) ===')
+        console.log(`Files: ${hasMainImageFile ? '1 main' : '0 main'}, ${hasGalleryFiles ? galleryImageFiles.length : '0'} gallery`)
+        
+         response = await fetch(`${API_CONFIG.BASE_URL}/products/${selectedProduct.id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${state.accessToken}`,
+            // Don't set Content-Type for FormData - browser sets it automatically
+          },
+          body: formData
+        })
+      } else {
+        // ========= JSON Method (for URL-only submission) =========
+        const filteredGalleryImages = productFormData.galleryImages.filter(url => url.trim() !== '')
+        
+        const payload = {
+          groupSku: productFormData.groupSku,
+          subSku: subSkuString,
+          brandId: parseInt(productFormData.brandId),
+          brandName: brandName,
+          title: productFormData.title,
+          category: productFormData.category,
+          collectionName: productFormData.collectionName,
+          singleSetItem: productFormData.singleSetItem,
+          brandRealPrice: parseFloat(productFormData.brandRealPrice) || 0,
+          brandMiscellaneous: parseFloat(productFormData.brandMiscellaneous) || 0,
+          msrp: parseFloat(productFormData.msrp) || 0,
+          shippingPrice: parseFloat(productFormData.shippingPrice) || 0,
+          commissionPrice: parseFloat(productFormData.commissionPrice) || 0,
+          profitMarginPrice: parseFloat(productFormData.profitMarginPrice) || 0,
+          ecommerceMiscellaneous: parseFloat(productFormData.ecommerceMiscellaneous) || 0,
+          mainImageUrl: productFormData.mainImageUrl || '',
+          galleryImages: filteredGalleryImages,
+          attributes: attributesPayload
+        }
+        
+        console.log('=== Sending JSON for Update (application/json) ===')
+        console.log(`Main Image URL: ${payload.mainImageUrl ? '✓' : '✗'}`)
+        console.log(`Gallery URLs: ${filteredGalleryImages.length}`)
+        
+         response = await fetch(`${API_CONFIG.BASE_URL}/products/${selectedProduct.id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${state.accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        })
       }
-      
-      console.log('=== Update Payload Summary ===')
-      console.log(`Main Image: ${mainImageFile ? 'FILE (base64)' : (mainImageToSend ? 'URL' : 'None')}`)
-      console.log(`Gallery Images: ${galleryImageFiles.length > 0 ? `${galleryImageFiles.length} FILE(S) (base64)` : `${galleryImagesToSend.length} URL(S)`}`)
-      console.log('==============================')
-      
-      // Make PUT request to update
-      const response = await fetch(`http://192.168.0.22:5000/api/products/${selectedProduct.id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${state.accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      })
       
       if (!response.ok) {
         let errorData: any = {}
@@ -2370,10 +2565,16 @@ const Products = () => {
       
       const data = await response.json()
       console.log('Product updated successfully:', data)
+      console.log('Updated product mainImageUrl:', data.product?.mainImageUrl)
+      console.log('Updated product galleryImages:', data.product?.galleryImages)
       
       // Close modal and refresh products
       handleCloseEditProduct()
-      loadProducts()
+      
+      // Add a small delay to ensure backend has processed the update
+      setTimeout(() => {
+        loadProducts()
+      }, 500)
       
     } catch (err: any) {
       console.error('Failed to update product:', err)
@@ -2400,7 +2601,7 @@ const Products = () => {
       setIsDeleting(true)
       setError(null)
       
-      const response = await fetch(`http://192.168.0.22:5000/api/products/${selectedProduct.id}`, {
+      const response = await fetch(`http://localhost:5000/api/products/${selectedProduct.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -2475,49 +2676,26 @@ const Products = () => {
     setPreviewImageTitle('')
   }
   
-  // Handle checkbox selection
+  // Handle checkbox selection - only allow one product at a time
   const handleSelectRow = (productId: number) => {
-    const newSelected = new Set(selectedRows)
-    if (newSelected.has(productId)) {
-      newSelected.delete(productId)
-      // Remove from selectedProducts
-      setSelectedProducts(prev => prev.filter(p => p.id !== productId))
+    // If this product is already selected, deselect it
+    if (selectedRows.has(productId)) {
+      setSelectedRows(new Set())
+      setSelectedProducts([])
     } else {
-      newSelected.add(productId)
-      // Add to selectedProducts
+      // Select only this product, deselect all others
+      const newSelected = new Set([productId])
       const product = products.find(p => p.id === productId)
       if (product) {
-        setSelectedProducts(prev => [...prev, product])
+        setSelectedProducts([product])
       }
+      setSelectedRows(newSelected)
     }
-    setSelectedRows(newSelected)
   }
   
+  // Disabled - only single selection allowed
   const handleSelectAll = () => {
-    if (selectedRows.size === products.length) {
-      // Deselect all current page products
-      const currentPageIds = new Set(products.map(p => p.id))
-      setSelectedRows(prev => {
-        const newSet = new Set(prev)
-        currentPageIds.forEach(id => newSet.delete(id))
-        return newSet
-      })
-      setSelectedProducts(prev => prev.filter(p => !currentPageIds.has(p.id)))
-    } else {
-      // Select all current page products
-      const newIds = new Set(selectedRows)
-      const newProducts = [...selectedProducts]
-      
-      products.forEach(p => {
-        if (!newIds.has(p.id)) {
-          newIds.add(p.id)
-          newProducts.push(p)
-        }
-      })
-      
-      setSelectedRows(newIds)
-      setSelectedProducts(newProducts)
-    }
+    // Do nothing - select all is disabled for single selection mode
   }
   
   const isRowSelected = (productId: number) => {
@@ -2764,9 +2942,9 @@ const Products = () => {
           {selectedRows.size > 0 && (
             <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-indigo-900 dark:text-indigo-100">
-                  {selectedRows.size} {selectedRows.size === 1 ? 'product' : 'products'} selected
-                </span>
+                  <span className="text-sm font-medium text-indigo-900 dark:text-indigo-100">
+                    {selectedRows.size === 1 ? '1 product selected' : 'No product selected'}
+                  </span>
                 <Button
                   onClick={() => {
                     setSelectedRows(new Set())
@@ -2787,14 +2965,14 @@ const Products = () => {
                   className="bg-gradient-to-r from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white"
                 >
                   <Package2 className="h-4 w-4 mr-2" />
-                  Add to Listings ({selectedRows.size})
+                  Add to Listings
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
                   className="bg-white dark:bg-slate-700"
                 >
-                  Bulk Export ({selectedRows.size})
+                  Export Product
                 </Button>
               </div>
             </div>
@@ -2826,16 +3004,9 @@ const Products = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12">
-                        <input
-                          type="checkbox"
-                          checked={isAllSelected()}
-                          ref={(el) => {
-                            if (el) el.indeterminate = isSomeSelected()
-                          }}
-                          onChange={handleSelectAll}
-                          className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                          title={isAllSelected() ? 'Deselect all' : 'Select all'}
-                        />
+                        <div className="w-4 h-4 flex items-center justify-center">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">Select</span>
+                        </div>
                       </TableHead>
                       {[
                         { key: 'mainImage', label: 'Image', width: 150 },
@@ -2885,10 +3056,12 @@ const Products = () => {
                       >
                         <TableCell className="w-12">
                           <input
-                            type="checkbox"
+                            type="radio"
+                            name="productSelection"
                             checked={isRowSelected(product.id)}
                             onChange={() => handleSelectRow(product.id)}
-                            className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            className="w-4 h-4 border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            aria-label={`Select product ${product.title}`}
                           />
                         </TableCell>
                         <TableCell className="text-center" style={{ width: `${getColumnWidth('mainImage', 170)}px` }}>
@@ -2906,16 +3079,16 @@ const Products = () => {
                                 className="hover:scale-105 transition-transform cursor-pointer rounded-full overflow-hidden border-2 border-emerald-500 dark:border-emerald-400"
                                 title={`Click to view all images`}
                               >
-                                {getProxiedImageUrl(product.mainImageUrl) && (
+                                {getImageUrl(product.mainImageUrl) && (
                                   <img 
-                                    src={getProxiedImageUrl(product.mainImageUrl)!} 
+                                    src={getImageUrl(product.mainImageUrl)!} 
                                     alt={product.title}
                                     className="w-10 h-10 rounded-full object-cover"
                                     referrerPolicy="no-referrer"
                                     loading="lazy"
                                   onError={(e) => {
                                     console.error('❌ Image failed to load:', product.mainImageUrl)
-                                    console.error('Proxied URL:', getProxiedImageUrl(product.mainImageUrl))
+                                    console.error('Proxied URL:', getImageUrl(product.mainImageUrl))
                                     const target = e.currentTarget as HTMLImageElement
                                     target.style.display = 'none'
                                     const parent = target.parentElement
@@ -3005,9 +3178,9 @@ const Products = () => {
                                 className="hover:scale-105 transition-transform cursor-pointer rounded-full overflow-hidden border-2 border-cyan-500 dark:border-cyan-400 relative"
                                 title={`Click to view ${product.galleryImages.length} images: ${product.galleryImages[0]}`}
                               >
-                                {getProxiedImageUrl(product.galleryImages[0]) && (
+                                {getImageUrl(product.galleryImages[0]) && (
                                   <img 
-                                    src={getProxiedImageUrl(product.galleryImages[0])!} 
+                                    src={getImageUrl(product.galleryImages[0])!} 
                                     alt={`${product.title} - Gallery`}
                                     className="w-10 h-10 object-cover"
                                     referrerPolicy="no-referrer"
@@ -3015,7 +3188,7 @@ const Products = () => {
                                   onError={(e) => {
                                     const imgUrl = product.galleryImages?.[0] || 'unknown'
                                     console.error('❌ Gallery image failed to load:', imgUrl)
-                                    console.error('Proxied URL:', getProxiedImageUrl(imgUrl))
+                                    console.error('Proxied URL:', getImageUrl(imgUrl))
                                     const target = e.currentTarget as HTMLImageElement
                                     target.style.display = 'none'
                                     const parent = target.parentElement
@@ -3170,9 +3343,9 @@ const Products = () => {
                     {selectedProductInfo.mainImageUrl && (
                       <div>
                         <p className="text-xs font-medium text-gray-600 dark:text-slate-400 mb-2">Main Image</p>
-                        {getProxiedImageUrl(selectedProductInfo.mainImageUrl) && (
+                        {getImageUrl(selectedProductInfo.mainImageUrl) && (
                           <img
-                            src={getProxiedImageUrl(selectedProductInfo.mainImageUrl)!}
+                            src={getImageUrl(selectedProductInfo.mainImageUrl)!}
                             alt="Main"
                           onClick={() => {
                             // Collect all images (main + gallery)
@@ -3190,9 +3363,9 @@ const Products = () => {
                     {selectedProductInfo.galleryImages && selectedProductInfo.galleryImages.map((img, idx) => (
                       <div key={idx}>
                         <p className="text-xs font-medium text-gray-600 dark:text-slate-400 mb-2">Gallery {idx + 1}</p>
-                        {getProxiedImageUrl(img) && (
+                        {getImageUrl(img) && (
                           <img
-                            src={getProxiedImageUrl(img)!}
+                            src={getImageUrl(img)!}
                             alt={`Gallery ${idx + 1}`}
                           onClick={() => {
                             // Collect all images (main + gallery)
@@ -3395,9 +3568,9 @@ const Products = () => {
                               {/* Main Image */}
                               {data.mainImageUrl && (
                                 <div className="relative group">
-                                  {getProxiedImageUrl(data.mainImageUrl) && (
+                                  {getImageUrl(data.mainImageUrl) && (
                                     <img
-                                      src={getProxiedImageUrl(data.mainImageUrl)!}
+                                      src={getImageUrl(data.mainImageUrl)!}
                                       alt={`${data.name || subSku} - Main Image`}
                                     className="w-20 h-20 object-cover rounded-lg border-2 border-emerald-500 dark:border-emerald-400 cursor-pointer hover:scale-105 transition-all duration-200 shadow-sm hover:shadow-md"
                                     onClick={() => {
@@ -3431,9 +3604,9 @@ const Products = () => {
                               {/* Gallery Images */}
                               {data.galleryImages && data.galleryImages.map((img: string, idx: number) => (
                                 <div key={idx} className="relative group">
-                                  {getProxiedImageUrl(img) && (
+                                  {getImageUrl(img) && (
                                     <img
-                                      src={getProxiedImageUrl(img)!}
+                                      src={getImageUrl(img)!}
                                       alt={`${data.name || subSku} - Gallery Image ${idx + 1}`}
                                     className="w-20 h-20 object-cover rounded-lg border-2 border-cyan-500 dark:border-cyan-400 cursor-pointer hover:scale-105 transition-all duration-200 shadow-sm hover:shadow-md"
                                     onClick={() => {
@@ -4084,30 +4257,38 @@ const Products = () => {
                   </label>
                   <div className="space-y-2">
                     <div className="flex gap-2">
-                      <Input
-                        type="url"
-                        value={productFormData.mainImageUrl}
-                        onChange={(e) => setProductFormData({...productFormData, mainImageUrl: e.target.value})}
-                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
-                        placeholder="Enter image URL or upload file"
-                      />
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleMainImageSelect}
-                        className="hidden"
-                        id="main-image-file-upload"
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => document.getElementById('main-image-file-upload')?.click()}
-                        size="sm"
-                        variant="outline"
-                        className="whitespace-nowrap"
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload File
-                      </Button>
+                      {/* URL Input - Only show if no file is uploaded */}
+                      {!mainImageFile && (
+                        <Input
+                          type="url"
+                          value={productFormData.mainImageUrl}
+                          onChange={(e) => setProductFormData({...productFormData, mainImageUrl: e.target.value})}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          placeholder="Enter image URL"
+                        />
+                      )}
+                      {/* File Upload Button - Only show if no URL is provided */}
+                      {!productFormData.mainImageUrl && (
+                        <>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleMainImageSelect}
+                            className="hidden"
+                            id="main-image-file-upload"
+                          />
+                          <Button
+                            type="button"
+                            onClick={() => document.getElementById('main-image-file-upload')?.click()}
+                            size="sm"
+                            variant="outline"
+                            className="whitespace-nowrap"
+                          >
+                            <Upload className="h-4 w-4 mr-2" />
+                            Upload File
+                          </Button>
+                        </>
+                      )}
                     </div>
                     {(mainImageFile || productFormData.mainImageUrl) && (
                       <div className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-gray-200 dark:border-slate-600">
@@ -4171,7 +4352,8 @@ const Products = () => {
                     Gallery Images
                   </label>
                   <div className="space-y-2">
-                    {productFormData.galleryImages.map((url, index) => (
+                    {/* URL Inputs - Only show if no files are uploaded */}
+                    {galleryImageFiles.length === 0 && productFormData.galleryImages.map((url, index) => (
                       <div key={index} className="space-y-2">
                         <div className="flex gap-2">
                           <Input
@@ -4225,24 +4407,29 @@ const Products = () => {
                       </div>
                     ))}
                     <div className="mt-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={handleGalleryImagesSelect}
-                        className="hidden"
-                        id="gallery-images-file-upload"
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => document.getElementById('gallery-images-file-upload')?.click()}
-                        size="sm"
-                        variant="outline"
-                        className="w-full"
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload Gallery Files
-                      </Button>
+                      {/* File Upload Button - Only show if no URLs are provided */}
+                      {productFormData.galleryImages.every(url => !url || url.trim() === '') && (
+                        <>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handleGalleryImagesSelect}
+                            className="hidden"
+                            id="gallery-images-file-upload"
+                          />
+                          <Button
+                            type="button"
+                            onClick={() => document.getElementById('gallery-images-file-upload')?.click()}
+                            size="sm"
+                            variant="outline"
+                            className="w-full"
+                          >
+                            <Upload className="h-4 w-4 mr-2" />
+                            Upload Gallery Files
+                          </Button>
+                        </>
+                      )}
                       {galleryImageFiles.length > 0 && (
                         <div className="mt-2 p-3 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-2 border-emerald-500 dark:border-emerald-400 rounded-lg">
                           <div className="flex items-center gap-2 mb-2">
@@ -4841,30 +5028,38 @@ const Products = () => {
                   </label>
                   <div className="space-y-2">
                     <div className="flex gap-2">
-                      <Input
-                        type="url"
-                        value={productFormData.mainImageUrl}
-                        onChange={(e) => setProductFormData({...productFormData, mainImageUrl: e.target.value})}
-                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
-                        placeholder="Enter image URL or upload file"
-                      />
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleMainImageSelect}
-                        className="hidden"
-                        id="edit-main-image-file-upload"
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => document.getElementById('edit-main-image-file-upload')?.click()}
-                        size="sm"
-                        variant="outline"
-                        className="whitespace-nowrap"
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload File
-                      </Button>
+                      {/* URL Input - Only show if no file is uploaded */}
+                      {!mainImageFile && (
+                        <Input
+                          type="url"
+                          value={productFormData.mainImageUrl}
+                          onChange={(e) => setProductFormData({...productFormData, mainImageUrl: e.target.value})}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          placeholder="Enter image URL"
+                        />
+                      )}
+                      {/* File Upload Button - Only show if no URL is provided */}
+                      {!productFormData.mainImageUrl && (
+                        <>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleMainImageSelect}
+                            className="hidden"
+                            id="edit-main-image-file-upload"
+                          />
+                          <Button
+                            type="button"
+                            onClick={() => document.getElementById('edit-main-image-file-upload')?.click()}
+                            size="sm"
+                            variant="outline"
+                            className="whitespace-nowrap"
+                          >
+                            <Upload className="h-4 w-4 mr-2" />
+                            Upload File
+                          </Button>
+                        </>
+                      )}
                     </div>
                     {(mainImageFile || productFormData.mainImageUrl) && (
                       <div className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-gray-200 dark:border-slate-600">
@@ -4928,7 +5123,8 @@ const Products = () => {
                     Gallery Images
                   </label>
                   <div className="space-y-2">
-                    {productFormData.galleryImages.map((url, index) => (
+                    {/* URL Inputs - Only show if no files are uploaded */}
+                    {galleryImageFiles.length === 0 && productFormData.galleryImages.map((url, index) => (
                       <div key={index} className="space-y-2">
                         <div className="flex gap-2">
                           <Input
@@ -4982,24 +5178,29 @@ const Products = () => {
                       </div>
                     ))}
                     <div className="mt-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={handleGalleryImagesSelect}
-                        className="hidden"
-                        id="edit-gallery-images-file-upload"
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => document.getElementById('edit-gallery-images-file-upload')?.click()}
-                        size="sm"
-                        variant="outline"
-                        className="w-full"
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload Gallery Files
-                      </Button>
+                      {/* File Upload Button - Only show if no URLs are provided */}
+                      {productFormData.galleryImages.every(url => !url || url.trim() === '') && (
+                        <>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handleGalleryImagesSelect}
+                            className="hidden"
+                            id="edit-gallery-images-file-upload"
+                          />
+                          <Button
+                            type="button"
+                            onClick={() => document.getElementById('edit-gallery-images-file-upload')?.click()}
+                            size="sm"
+                            variant="outline"
+                            className="w-full"
+                          >
+                            <Upload className="h-4 w-4 mr-2" />
+                            Upload Gallery Files
+                          </Button>
+                        </>
+                      )}
                       {galleryImageFiles.length > 0 && (
                         <div className="mt-2 p-3 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-2 border-emerald-500 dark:border-emerald-400 rounded-lg">
                           <div className="flex items-center gap-2 mb-2">
@@ -5718,15 +5919,97 @@ const Products = () => {
                         {/* Main Image */}
                         <div className="mb-4">
                           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                            Main Image URL
+                            Main Image
                           </label>
-                          <Input
-                            type="url"
-                            value={form.data.mainImageUrl}
-                            onChange={(e) => updateBulkFormData(form.id, 'mainImageUrl', e.target.value)}
-                            className="dark:bg-slate-700 dark:text-slate-100"
-                            placeholder="Enter main image URL"
-                          />
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              {/* URL Input - Only show if no file is uploaded */}
+                              {!bulkMainImageFiles[form.id] && (
+                                <Input
+                                  type="url"
+                                  value={form.data.mainImageUrl}
+                                  onChange={(e) => updateBulkFormData(form.id, 'mainImageUrl', e.target.value)}
+                                  className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                                  placeholder="Enter image URL"
+                                />
+                              )}
+                              {/* File Upload Button - Only show if no URL is provided */}
+                              {!form.data.mainImageUrl && (
+                                <>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => handleBulkMainImageSelect(e, form.id)}
+                                    className="hidden"
+                                    id={`bulk-main-image-file-upload-${form.id}`}
+                                  />
+                                  <Button
+                                    type="button"
+                                    onClick={() => document.getElementById(`bulk-main-image-file-upload-${form.id}`)?.click()}
+                                    size="sm"
+                                    variant="outline"
+                                    className="whitespace-nowrap"
+                                  >
+                                    <Upload className="h-4 w-4 mr-2" />
+                                    Upload File
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                            {(bulkMainImageFiles[form.id] || form.data.mainImageUrl) && (
+                              <div className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-gray-200 dark:border-slate-600">
+                                {bulkMainImageFiles[form.id] ? (
+                                  <>
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br from-emerald-100 to-green-100 dark:from-emerald-900/30 dark:to-green-900/30 border-2 border-emerald-500 dark:border-emerald-400 relative">
+                                      <Upload className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                                      <div className="absolute -top-1 -right-1 bg-green-500 rounded-full p-0.5">
+                                        <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+                                        </svg>
+                                      </div>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">File Ready to Upload</p>
+                                      <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                                        📎 {bulkMainImageFiles[form.id]?.name}
+                                      </p>
+                                      <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                                        {(bulkMainImageFiles[form.id]!.size / 1024).toFixed(1)} KB • {bulkMainImageFiles[form.id]!.type}
+                                      </p>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                <img 
+                                  src={form.data.mainImageUrl} 
+                                  alt="Main image preview" 
+                                  className="w-10 h-10 rounded-full object-cover border border-gray-300 dark:border-slate-500"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="64" height="64"%3E%3Crect fill="%23ddd" width="64" height="64"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E'
+                                  }}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                                    🔗 URL provided
+                                  </p>
+                                </div>
+                                  </>
+                                )}
+                                <Button
+                                  type="button"
+                                  onClick={() => {
+                                    updateBulkFormData(form.id, 'mainImageUrl', '')
+                                    setBulkMainImageFiles({...bulkMainImageFiles, [form.id]: null})
+                                  }}
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         
                         {/* Gallery Images */}
@@ -6230,9 +6513,9 @@ const Products = () => {
                 </h3>
               </div>
               <div className="p-4 flex justify-center items-center bg-gray-50 dark:bg-slate-900">
-                {getProxiedImageUrl(previewImageUrl) && (
+                {getImageUrl(previewImageUrl) && (
                   <img
-                    src={getProxiedImageUrl(previewImageUrl)!}
+                    src={getImageUrl(previewImageUrl)!}
                     alt={previewImageTitle}
                     className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl"
                     onClick={(e) => e.stopPropagation()}
@@ -6283,9 +6566,9 @@ const Products = () => {
               {/* Image Display */}
               <div className="relative bg-gray-50 dark:bg-slate-900">
                 <div className="p-8 flex justify-center items-center min-h-[60vh]">
-                  {getProxiedImageUrl(galleryImages[currentGalleryIndex]) && (
+                  {getImageUrl(galleryImages[currentGalleryIndex]) && (
                     <img
-                      src={getProxiedImageUrl(galleryImages[currentGalleryIndex])!}
+                      src={getImageUrl(galleryImages[currentGalleryIndex])!}
                       alt={`${galleryTitle} - Image ${currentGalleryIndex + 1}`}
                       className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-2xl"
                       onClick={(e) => e.stopPropagation()}
@@ -6341,9 +6624,9 @@ const Products = () => {
                             : 'border-gray-300 dark:border-gray-600 hover:border-cyan-400'
                         }`}
                       >
-                        {getProxiedImageUrl(img) && (
+                        {getImageUrl(img) && (
                           <img
-                            src={getProxiedImageUrl(img)!}
+                            src={getImageUrl(img)!}
                             alt={`Thumbnail ${index + 1}`}
                             className="w-20 h-20 object-cover"
                             referrerPolicy="no-referrer"
@@ -6372,7 +6655,7 @@ const Products = () => {
           error={error}
           isSubmitting={isSubmittingListings}
           onSubmit={handleSubmitListings}
-          getProxiedImageUrl={getProxiedImageUrl}
+          getImageUrl={getImageUrl}
           setPreviewImageUrl={setPreviewImageUrl}
           setPreviewImageTitle={setPreviewImageTitle}
           setShowImagePreview={setShowImagePreview}
@@ -6401,9 +6684,9 @@ const Products = () => {
             
             {/* Image */}
             <div className="flex-1 flex items-center justify-center">
-              {getProxiedImageUrl(fullscreenImageUrl) && (
+              {getImageUrl(fullscreenImageUrl) && (
                 <img
-                  src={getProxiedImageUrl(fullscreenImageUrl)!}
+                  src={getImageUrl(fullscreenImageUrl)!}
                   alt={fullscreenImageTitle}
                   className="max-w-full max-h-full object-contain"
                   onClick={(e) => e.stopPropagation()}

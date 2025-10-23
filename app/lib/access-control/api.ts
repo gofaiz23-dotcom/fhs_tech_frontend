@@ -4,13 +4,13 @@
  * This service handles all access control related API calls including
  * fetching brands, marketplaces, shipping platforms, and toggling user access.
  * 
- * Base URL: http://192.168.0.22:5000/api
+ * Base URL: http://localhost:5000/api
  */
 
 import { ensureValidToken } from '../auth/api';
 
 // Base API configuration
-const API_BASE_URL = 'http://192.168.0.22:5000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 /**
  * Brand interface

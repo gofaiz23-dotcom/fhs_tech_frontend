@@ -287,7 +287,7 @@ export class ProductsService {
     console.log('📥 Products API: Downloading image template...');
     
     try {
-      const response = await fetch('http://192.168.0.22:5000/api/products/images/template', {
+      const response = await fetch('http://localhost:5000/api/products/images/template', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -352,7 +352,7 @@ export class ProductsService {
     formData.append('file', file);
 
     try {
-      const response = await fetch('http://192.168.0.22:5000/api/products/images', {
+      const response = await fetch('http://localhost:5000/api/products/images', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${accessToken}`,

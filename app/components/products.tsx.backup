@@ -1237,7 +1237,7 @@ const Products = () => {
       const finalPayload = payload.length === 1 ? payload[0] : { listings: payload }
       
       // Send to API
-      const response = await fetch('http://192.168.0.22:5000/api/listings', {
+      const response = await fetch('http://localhost:5000/api/listings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1536,10 +1536,10 @@ const Products = () => {
           }
         })
         console.log('🌐 Content-Type: multipart/form-data (set automatically by browser)')
-        console.log('🚀 About to send FormData request to: http://192.168.0.22:5000/api/products')
+        console.log('🚀 About to send FormData request to: http://localhost:5000/api/products')
         
         try {
-          response = await fetch('http://192.168.0.22:5000/api/products', {
+          response = await fetch('http://localhost:5000/api/products', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${state.accessToken}`,
@@ -1583,7 +1583,7 @@ const Products = () => {
         console.log(`Gallery URLs: ${filteredGalleryImages.length}`)
         console.log('Backend will download these URLs')
         
-        response = await fetch('http://192.168.0.22:5000/api/products', {
+        response = await fetch('http://localhost:5000/api/products', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -1808,7 +1808,7 @@ const Products = () => {
             attributes: attributesTemp
           }
           
-          const response = await fetch('http://192.168.0.22:5000/api/products', {
+          const response = await fetch('http://localhost:5000/api/products', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${state.accessToken}`,
@@ -1864,7 +1864,7 @@ const Products = () => {
       
       console.log('📁 Importing file:', importFile.name)
       
-      const response = await fetch('http://192.168.0.22:5000/api/products/import', {
+      const response = await fetch('http://localhost:5000/api/products/import', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -2028,7 +2028,7 @@ const Products = () => {
     
     try {
       // Call API to create new brand
-      const response = await fetch('http://192.168.0.22:5000/api/brands', {
+      const response = await fetch('http://localhost:5000/api/brands', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2260,7 +2260,7 @@ const Products = () => {
       console.log('==============================')
       
       // Make PUT request to update
-      const response = await fetch(`http://192.168.0.22:5000/api/products/${selectedProduct.id}`, {
+      const response = await fetch(`http://localhost:5000/api/products/${selectedProduct.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
@@ -2318,7 +2318,7 @@ const Products = () => {
       setIsDeleting(true)
       setError(null)
       
-      const response = await fetch(`http://192.168.0.22:5000/api/products/${selectedProduct.id}`, {
+      const response = await fetch(`http://localhost:5000/api/products/${selectedProduct.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${state.accessToken}`,
