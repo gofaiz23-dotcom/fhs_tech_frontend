@@ -1328,7 +1328,7 @@ const Products = () => {
           // Single listing - send as individual fields
           const listing = payload[0]
           formData.append('title', listing.title)
-          formData.append('sku', listing.sku)
+          formData.append('sku', listing.Sku)
           formData.append('subSku', listing.subSku)
           formData.append('category', listing.category)
           formData.append('collectionName', listing.collectionName)
