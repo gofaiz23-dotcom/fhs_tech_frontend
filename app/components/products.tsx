@@ -19,7 +19,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { Search, Download, Plus, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Image as ImageIcon, Images, Building2, Package2, Filter, Maximize2, Minimize2, Upload, Edit, Trash2, Minus } from 'lucide-react'
+import { Search, Download, Plus, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Image as ImageIcon, Images, Building2, Package2, Filter, Maximize2, Minimize2, Upload, Edit, Trash2, Minus, Link } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { ProductsService, type Product, type ProductsFilters, type Brand, type ProductAttributes } from '../lib/products/api'
 import { BrandsService } from '../lib/brands/api'
@@ -1321,17 +1321,50 @@ const Products = () => {
           }
         })
         
-        // Prepare final payload based on single or multiple
-        const finalPayload = payload.length === 1 ? payload[0] : { listings: payload }
+        // Prepare FormData for backend
+        const formData = new FormData()
         
-        // Send to API with JSON
+        if (payload.length === 1) {
+          // Single listing - send as individual fields
+          const listing = payload[0]
+          formData.append('title', listing.title)
+          formData.append('sku', listing.sku)
+          formData.append('subSku', listing.subSku)
+          formData.append('category', listing.category)
+          formData.append('collectionName', listing.collectionName)
+          formData.append('shipTypes', listing.shipTypes)
+          formData.append('singleSetItem', listing.singleSetItem)
+          formData.append('brandId', listing.brandId.toString())
+          formData.append('brandName', listing.brandName)
+          formData.append('brandRealPrice', listing.brandRealPrice.toString())
+          formData.append('brandMiscellaneous', listing.brandMiscellaneous.toString())
+          formData.append('msrp', listing.msrp.toString())
+          formData.append('shippingPrice', listing.shippingPrice.toString())
+          formData.append('commissionPrice', listing.commissionPrice.toString())
+          formData.append('profitMarginPrice', listing.profitMarginPrice.toString())
+          formData.append('ecommerceMiscellaneous', listing.ecommerceMiscellaneous.toString())
+          formData.append('ecommercePrice', listing.ecommercePrice.toString())
+          formData.append('mainImageUrl', listing.mainImageUrl)
+          if (listing.galleryImages && Array.isArray(listing.galleryImages)) {
+            listing.galleryImages.forEach((image, index) => {
+              formData.append('galleryImages', image)
+            })
+          }
+          formData.append('attributes', JSON.stringify(listing.attributes))
+        } else {
+          // Multiple listings - send as JSON string in FormData
+          formData.append('listings', JSON.stringify(payload))
+        }
+        
+        console.log('📤 Sending FormData to backend with', payload.length, 'listings')
+        
+        // Send to API with FormData
          const response = await fetch(`${API_CONFIG.BASE_URL}/listings`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
             'Authorization': `Bearer ${state.accessToken}`
           },
-          body: JSON.stringify(finalPayload)
+          body: formData
         })
         
         if (!response.ok) {
@@ -2423,8 +2456,7 @@ const Products = () => {
       // Check if we have files to upload
       const hasMainImageFile = mainImageFile !== null
       const hasGalleryFiles = galleryImageFiles.length > 0
-      // Force JSON approach to avoid brandId type issues with FormData
-      const useFormData = false // hasMainImageFile || hasGalleryFiles
+      const useFormData = hasMainImageFile || hasGalleryFiles
       
       console.log('🔍 Update method check:')
       console.log('  - Main image file:', hasMainImageFile ? mainImageFile?.name : 'None')
@@ -4250,6 +4282,38 @@ const Products = () => {
               <div className="border dark:border-slate-700 rounded-lg p-4">
                 <h4 className="font-semibold text-lg text-gray-900 dark:text-slate-100 mb-4">Images</h4>
                 
+                {/* Image Type Toggle Buttons */}
+                <div className="mb-4">
+                  <div className="flex gap-2 mb-4">
+                    <Button
+                      type="button"
+                      variant={!mainImageFile ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setMainImageFile(null)
+                        setProductFormData({...productFormData, mainImageUrl: ''})
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <Link className="h-4 w-4" />
+                      URL
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={mainImageFile ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setProductFormData({...productFormData, mainImageUrl: ''})
+                        document.getElementById('main-image-file-upload')?.click()
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <Upload className="h-4 w-4" />
+                      File
+                    </Button>
+                  </div>
+                </div>
+                
                 {/* Main Image */}
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
@@ -4267,28 +4331,14 @@ const Products = () => {
                           placeholder="Enter image URL"
                         />
                       )}
-                      {/* File Upload Button - Only show if no URL is provided */}
-                      {!productFormData.mainImageUrl && (
-                        <>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleMainImageSelect}
-                            className="hidden"
-                            id="main-image-file-upload"
-                          />
-                          <Button
-                            type="button"
-                            onClick={() => document.getElementById('main-image-file-upload')?.click()}
-                            size="sm"
-                            variant="outline"
-                            className="whitespace-nowrap"
-                          >
-                            <Upload className="h-4 w-4 mr-2" />
-                            Upload File
-                          </Button>
-                        </>
-                      )}
+                      {/* File Upload - Hidden input */}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleMainImageSelect}
+                        className="hidden"
+                        id="main-image-file-upload"
+                      />
                     </div>
                     {(mainImageFile || productFormData.mainImageUrl) && (
                       <div className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-gray-200 dark:border-slate-600">
