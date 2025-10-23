@@ -57,13 +57,13 @@ export default function Navbar() {
         //   width: `calc(100% - ${sidebarCollapsed ? '256px' : '64px'})`
         // }}
       >
-        <div className="flex items-center justify-between px-4 md:px-6 py-4">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4">
           {/* Left Section */}
           <div className="flex items-center gap-3">
             {/* Mobile Menu Button */}
             <button
               onClick={toggleMobileMenu}
-              className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="sm:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               aria-label="Toggle mobile menu"
             >
               {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}

@@ -91,7 +91,7 @@ export default function BrandsPage() {
 
     try {
       setIsSubmitting(true);
-      await BrandsService.createBrand(formData, authState.accessToken);
+      await BrandsService.createBrand(authState.accessToken, formData);
       setShowCreateModal(false);
       setFormData({ name: '', description: '' });
       loadBrands(); // Refresh the list
@@ -110,7 +110,7 @@ export default function BrandsPage() {
 
     try {
       setIsSubmitting(true);
-      await BrandsService.updateBrand(selectedBrand.id, formData, authState.accessToken);
+      await BrandsService.updateBrand(authState.accessToken, selectedBrand.id, formData);
       setShowEditModal(false);
       setSelectedBrand(null);
       setFormData({ name: '', description: '' });
@@ -129,7 +129,7 @@ export default function BrandsPage() {
 
     try {
       setIsSubmitting(true);
-      await BrandsService.deleteBrand(selectedBrand.id, authState.accessToken);
+      await BrandsService.deleteBrand(authState.accessToken, selectedBrand.id);
       setShowDeleteModal(false);
       setSelectedBrand(null);
       loadBrands(); // Refresh the list
@@ -146,7 +146,7 @@ export default function BrandsPage() {
     setSelectedBrand(brand);
     setFormData({
       name: brand.name,
-      description: brand.description
+      description: brand.description || ''
     });
     setShowEditModal(true);
   };
@@ -182,7 +182,7 @@ export default function BrandsPage() {
 
     try {
       setIsSubmitting(true);
-      const response = await BrandsService.createMultipleBrands({ brands: bulkBrands }, authState.accessToken);
+      const response = await BrandsService.createMultipleBrands(authState.accessToken, bulkBrands);
       setBulkResults(response);
       setShowBulkModal(false);
       setBulkBrands([]);
@@ -208,7 +208,7 @@ export default function BrandsPage() {
         lastModified: uploadFile.lastModified
       });
       
-      const response = await BrandsService.uploadBrandsFromFile(uploadFile, authState.accessToken);
+      const response = await BrandsService.uploadBrandsFromFile(authState.accessToken, uploadFile);
       console.log('✅ Upload successful:', response);
       setBulkResults(response);
       setShowUploadModal(false);
@@ -264,7 +264,7 @@ export default function BrandsPage() {
   // Filter brands based on search term
   const filteredBrands = brands.filter(brand =>
     brand.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    brand.description.toLowerCase().includes(searchTerm.toLowerCase())
+    (brand.description || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -506,7 +506,7 @@ export default function BrandsPage() {
           isDeleting={isSubmitting}
           warningMessage="This will permanently delete the brand and all associated data."
           additionalInfo={selectedBrand ? [
-            { label: 'Description', value: selectedBrand.description },
+            { label: 'Description', value: selectedBrand.description || 'No description' },
             { label: 'ID', value: selectedBrand.id.toString() }
           ] : []}
         />

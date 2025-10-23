@@ -109,8 +109,8 @@ export default function LoginPage() {
         Your browser does not support the video tag.
       </video>
       <div className="absolute inset-0 bg-black/40 z-10" />
-      <div className="relative w-full max-w-md mx-auto p-6 z-20">
-        <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-xl shadow-xl p-8">
+      <div className="relative w-full max-w-md mx-auto p-4 sm:p-6 z-20">
+        <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-xl shadow-xl p-6 sm:p-8">
           <div className="flex items-center gap-3 mb-6">
             <Image src="/fhs-tech-logo.png" alt="FHS Tech" width={120} height={120} />
           </div>

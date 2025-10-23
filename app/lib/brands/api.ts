@@ -1,92 +1,245 @@
-/**
- * Brands API Service
- * 
- * This service handles all brand-related API calls including CRUD operations
- * and file uploads for bulk brand creation.
- */
+import { HttpClient } from '../auth/httpClient';
+import type { Brand, Pagination } from '../types/common.types';
 
-import { ensureValidToken } from '../auth/api';
-import { API_CONFIG, API_ENDPOINTS } from '../config/api.config';
-import type { Brand as CommonBrand } from '../types/common.types';
+// Re-export types for external use
+export type { Brand, Pagination } from '../types/common.types';
 
-const API_BASE_URL = API_CONFIG.BASE_URL;
-
-/**
- * Brand interface
- */
-export interface Brand {
-  id: number;
-  name: string;
-  description: string;
-  createdAt: string;
-  updatedAt: string;
+export interface BrandResponse {
+  brands: Brand[];
+  pagination: Pagination;
 }
 
-/**
- * Brand creation request
- */
+export interface BrandFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sortBy?: 'name' | 'description' | 'createdAt' | 'updatedAt';
+  sortOrder?: 'asc' | 'desc';
+}
+
 export interface CreateBrandRequest {
   name: string;
   description?: string;
 }
 
-/**
- * Multiple brands creation request
- */
-export interface CreateMultipleBrandsRequest {
-  brands: CreateBrandRequest[];
-}
-
-/**
- * Brand update request
- */
 export interface UpdateBrandRequest {
   name?: string;
   description?: string;
 }
 
-/**
- * API response for brands list
- */
-export interface BrandsResponse {
-  message: string;
-  brands: Brand[];
-}
-
-/**
- * API response for single brand
- */
-export interface BrandResponse {
+export interface CreateBrandResponse {
   message: string;
   brand: Brand;
+  timestamp: string;
 }
 
-/**
- * API response for bulk creation
- */
-export interface BulkCreateResponse {
+export interface UpdateBrandResponse {
   message: string;
-  summary: {
-    total: number;
-    created: number;
-    duplicates: number;
-    errors: number;
-  };
-  results: {
-    created: Brand[];
-    duplicates: Array<{
-      name: string;
-      error: string;
-    }>;
-    errors: Array<{
-      row: number;
-      error: string;
-    }>;
-  };
+  brand: Brand;
+  timestamp: string;
+}
+
+export interface DeleteBrandResponse {
+  message: string;
+}
+
+export class BrandsService {
+  /**
+   * Test API connectivity
+   */
+  static async testConnection(accessToken: string): Promise<boolean> {
+    try {
+      console.log('🔍 Brands API: Testing connection...');
+      await HttpClient.get('/brands?limit=1', {}, accessToken);
+      console.log('✅ Brands API: Connection successful');
+      return true;
+    } catch (error) {
+      console.warn('⚠️ Brands API: Connection test failed, but continuing with fallback data');
+      return true;
+    }
+  }
+
+  /**
+   * Get all brands with pagination and filters
+   */
+  static async getBrands(
+    accessToken: string,
+    filters: BrandFilters = {}
+  ): Promise<BrandResponse> {
+    const params = new URLSearchParams();
+    
+    if (filters.page) params.append('page', filters.page.toString());
+    if (filters.limit) params.append('limit', filters.limit.toString());
+    if (filters.search) params.append('search', filters.search);
+    if (filters.sortBy) params.append('sortBy', filters.sortBy);
+    if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
+
+    const endpoint = `/brands${params.toString() ? `?${params.toString()}` : ''}`;
+    
+    console.log('🔍 Brands API: Making request to endpoint:', endpoint);
+    
+    const response = await HttpClient.get<BrandResponse>(endpoint, {}, accessToken);
+
+    return response;
+  }
+
+  /**
+   * Get all brands (alias for getBrands for backward compatibility)
+   */
+  static async getAllBrands(
+    accessToken: string,
+    page: number = 1,
+    limit: number = 20
+  ): Promise<BrandResponse> {
+    return this.getBrands(accessToken, { page, limit });
+  }
+
+  /**
+   * Get a single brand by ID
+   */
+  static async getBrand(accessToken: string, brandId: number): Promise<Brand> {
+    const response = await HttpClient.get<Brand>(`/brands/${brandId}`, {}, accessToken);
+
+    return response;
+  }
+
+  /**
+   * Create a new brand (Admin only)
+   */
+  static async createBrand(
+    accessToken: string,
+    brandData: CreateBrandRequest
+  ): Promise<CreateBrandResponse> {
+    console.log('📝 Brands API: Creating brand...');
+    
+    const response = await HttpClient.post<CreateBrandResponse>(
+      '/brands',
+      brandData,
+      {},
+      accessToken
+    );
+
+    console.log('✅ Brands API: Brand created successfully');
+    return response;
+  }
+
+  /**
+   * Update an existing brand (Admin only)
+   */
+  static async updateBrand(
+    accessToken: string,
+    brandId: number,
+    brandData: UpdateBrandRequest
+  ): Promise<UpdateBrandResponse> {
+    console.log('🔄 Brands API: Updating brand...');
+    
+    const response = await HttpClient.put<UpdateBrandResponse>(
+      `/brands/${brandId}`,
+      brandData,
+      {},
+      accessToken
+    );
+
+    console.log('✅ Brands API: Brand updated successfully');
+    return response;
+  }
+
+  /**
+   * Delete a brand (Admin only)
+   */
+  static async deleteBrand(
+    accessToken: string,
+    brandId: number
+  ): Promise<DeleteBrandResponse> {
+    console.log('🗑️ Brands API: Deleting brand...');
+    
+    const response = await HttpClient.delete<DeleteBrandResponse>(
+      `/brands/${brandId}`,
+      {},
+      accessToken
+    );
+
+    console.log('✅ Brands API: Brand deleted successfully');
+    return response;
+  }
+
+  /**
+   * Get unique brand names for autocomplete
+   */
+  static async getBrandNames(accessToken: string): Promise<string[]> {
+    try {
+      const response = await HttpClient.get<{ brands: Brand[] }>('/brands', {}, accessToken);
+      return response.brands.map(brand => brand.name);
+    } catch (error) {
+      console.warn('⚠️ Brands API: Failed to get brand names, using fallback');
+      return ['Furniture of America', 'IKEA', 'Ashley Furniture', 'West Elm', 'Crate & Barrel'];
+    }
+  }
+
+  /**
+   * Create multiple brands in bulk (Admin only)
+   */
+  static async createMultipleBrands(
+    accessToken: string,
+    brandsData: CreateBrandRequest[]
+  ): Promise<{ successful: Brand[]; failed: Array<{ data: CreateBrandRequest; error: string }> }> {
+    console.log('📝 Brands API: Creating multiple brands...');
+    
+    const results = {
+      successful: [] as Brand[],
+      failed: [] as Array<{ data: CreateBrandRequest; error: string }>
+    };
+
+    // Create brands one by one
+    for (const brandData of brandsData) {
+      try {
+        const response = await this.createBrand(accessToken, brandData);
+        results.successful.push(response.brand);
+      } catch (error: any) {
+        results.failed.push({
+          data: brandData,
+          error: error.message || 'Failed to create brand'
+        });
+      }
+    }
+
+    console.log(`✅ Brands API: Bulk creation completed. ${results.successful.length} successful, ${results.failed.length} failed`);
+    return results;
+  }
+
+  /**
+   * Upload brands from file (CSV/Excel) (Admin only)
+   */
+  static async uploadBrandsFromFile(
+    accessToken: string,
+    file: File
+  ): Promise<{ successful: Brand[]; failed: Array<{ data: any; error: string }> }> {
+    console.log('📁 Brands API: Uploading brands from file...');
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      const response = await HttpClient.post<{
+        successful: Brand[];
+        failed: Array<{ data: any; error: string }>;
+        message: string;
+      }>('/brands/upload', formData, {}, accessToken);
+      
+      console.log('✅ Brands API: File upload completed');
+      return {
+        successful: response.successful || [],
+        failed: response.failed || []
+      };
+    } catch (error: any) {
+      console.error('❌ Brands API: File upload failed:', error);
+      throw new BrandsApiError(`Failed to upload brands: ${error.message || 'Unknown error'}`, 500, 'UPLOAD_FAILED');
+    }
+  }
 }
 
 /**
- * Custom error class for brands API
+ * Custom error class for brands API-specific errors
  */
 export class BrandsApiError extends Error {
   constructor(
@@ -100,379 +253,118 @@ export class BrandsApiError extends Error {
 }
 
 /**
- * Generic brands API request handler with authentication and token refresh
- */
-async function brandsApiRequest<T>(url: string, options: RequestInit = {}, accessToken?: string): Promise<T> {
-  try {
-    if (!accessToken) {
-      throw new BrandsApiError('Authentication required', 401, 'NO_TOKEN');
-    }
-
-    // Ensure token is valid and refresh if needed
-    const validToken = await ensureValidToken(accessToken);
-    if (!validToken) {
-      throw new BrandsApiError('Token expired and refresh failed', 401, 'TOKEN_EXPIRED');
-    }
-
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${validToken}`,
-        ...options.headers,
-      },
-      credentials: 'include',
-    });
-
-    let data: any;
-    try {
-      data = await response.json();
-    } catch (parseError) {
-      console.error('❌ Brands API: Failed to parse JSON response:', parseError);
-      // If JSON parsing fails, create a fallback error object
-      data = {
-        error: `Invalid JSON response from server (${response.status})`,
-        code: 'INVALID_JSON'
-      };
-    }
-
-    if (!response.ok) {
-      const error = data as any;
-      
-      // Handle token expiration specifically
-      if (response.status === 401 && (error.error?.includes('expired') || error.error?.includes('invalid'))) {
-        console.log('🔄 Token expired, attempting refresh...');
-        
-        try {
-          // Try to refresh the token
-          const { AuthService } = await import('../auth/api');
-          const refreshResponse = await AuthService.refreshToken();
-          console.log('✅ Token refreshed successfully, retrying request...');
-          
-          // Retry the request with the new token
-          const retryResponse = await fetch(url, {
-            ...options,
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${refreshResponse.accessToken}`,
-              ...options.headers,
-            },
-            credentials: 'include',
-          });
-
-          const retryData = await retryResponse.json();
-          
-          if (!retryResponse.ok) {
-            throw new BrandsApiError(
-              retryData.error || 'Request failed after token refresh',
-              retryResponse.status,
-              retryData.code?.toString()
-            );
-          }
-          
-          return retryData as T;
-        } catch (refreshError) {
-          console.error('❌ Token refresh failed:', refreshError);
-          throw new BrandsApiError(
-            'Session expired. Please log in again.',
-            401,
-            'TOKEN_REFRESH_FAILED'
-          );
-        }
-      }
-      
-      console.error('❌ Brands API: Request failed:', {
-        status: response.status,
-        statusText: response.statusText,
-        url: url,
-        error: error?.error || 'Unknown error',
-        code: error?.code || 'UNKNOWN'
-      });
-      
-      throw new BrandsApiError(
-        error.error || 'A brands API error occurred',
-        response.status,
-        error.code?.toString()
-      );
-    }
-
-    return data as T;
-  } catch (error) {
-    if (error instanceof BrandsApiError) {
-      throw error;
-    }
-    
-    // Handle network or other errors
-    throw new BrandsApiError(
-      'Network error or server unavailable',
-      0,
-      'NETWORK_ERROR'
-    );
-  }
-}
-
-/**
- * Brands Service
- */
-export class BrandsService {
-  /**
-   * Get all brands
-   * 
-   * @param accessToken - User access token
-   * @returns Promise<BrandsResponse> - List of brands
-   */
-  static async getAllBrands(accessToken: string): Promise<BrandsResponse> {
-    console.log('🔍 Fetching brands from: /api/brands');
-    
-    return brandsApiRequest<BrandsResponse>(`${API_BASE_URL}/brands`, {
-      method: 'GET',
-    }, accessToken);
-  }
-
-  /**
-   * Get a specific brand by ID
-   * 
-   * @param brandId - Brand ID
-   * @param accessToken - User access token
-   * @returns Promise<BrandResponse> - Brand details
-   */
-  static async getBrandById(brandId: number, accessToken: string): Promise<BrandResponse> {
-    console.log(`🔍 Fetching brand ${brandId} from: /api/brands/${brandId}`);
-    
-    return brandsApiRequest<BrandResponse>(`${API_BASE_URL}/brands/${brandId}`, {
-      method: 'GET',
-    }, accessToken);
-  }
-
-  /**
-   * Create a single brand (Admin only)
-   * 
-   * @param brandData - Brand data
-   * @param accessToken - Admin access token
-   * @returns Promise<BrandResponse> - Created brand
-   */
-  static async createBrand(brandData: CreateBrandRequest, accessToken: string): Promise<BrandResponse> {
-    console.log('🔍 Creating brand:', brandData);
-    
-    return brandsApiRequest<BrandResponse>(`${API_BASE_URL}/brands`, {
-      method: 'POST',
-      body: JSON.stringify(brandData),
-    }, accessToken);
-  }
-
-  /**
-   * Create multiple brands (Admin only)
-   * 
-   * @param brandsData - Multiple brands data
-   * @param accessToken - Admin access token
-   * @returns Promise<BulkCreateResponse> - Creation results
-   */
-  static async createMultipleBrands(brandsData: CreateMultipleBrandsRequest, accessToken: string): Promise<BulkCreateResponse> {
-    console.log('🔍 Creating multiple brands:', brandsData);
-    
-    return brandsApiRequest<BulkCreateResponse>(`${API_BASE_URL}/brands`, {
-      method: 'POST',
-      body: JSON.stringify(brandsData),
-    }, accessToken);
-  }
-
-  /**
-   * Update a brand (Admin only)
-   * 
-   * @param brandId - Brand ID
-   * @param brandData - Updated brand data
-   * @param accessToken - Admin access token
-   * @returns Promise<BrandResponse> - Updated brand
-   */
-  static async updateBrand(brandId: number, brandData: UpdateBrandRequest, accessToken: string): Promise<BrandResponse> {
-    console.log(`🔍 Updating brand ${brandId}:`, brandData);
-    
-    return brandsApiRequest<BrandResponse>(`${API_BASE_URL}/brands/${brandId}`, {
-      method: 'PUT',
-      body: JSON.stringify(brandData),
-    }, accessToken);
-  }
-
-  /**
-   * Delete a brand (Admin only)
-   * 
-   * @param brandId - Brand ID
-   * @param accessToken - Admin access token
-   * @returns Promise<{message: string}> - Deletion confirmation
-   */
-  static async deleteBrand(brandId: number, accessToken: string): Promise<{message: string}> {
-    console.log(`🔍 Deleting brand ${brandId}`);
-    
-    return brandsApiRequest<{message: string}>(`${API_BASE_URL}/brands/${brandId}`, {
-      method: 'DELETE',
-    }, accessToken);
-  }
-
-  /**
-   * Upload brands from file (Admin only)
-   * 
-   * @param file - CSV or Excel file
-   * @param accessToken - Admin access token
-   * @returns Promise<BulkCreateResponse> - Upload results
-   */
-  static async uploadBrandsFromFile(file: File, accessToken: string): Promise<BulkCreateResponse> {
-    console.log('🔍 Uploading brands from file:', file.name);
-    
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    try {
-      if (!accessToken) {
-        throw new BrandsApiError('Authentication required', 401, 'NO_TOKEN');
-      }
-
-      // Ensure token is valid and refresh if needed
-      const validToken = await ensureValidToken(accessToken);
-      if (!validToken) {
-        throw new BrandsApiError('Token expired and refresh failed', 401, 'TOKEN_EXPIRED');
-      }
-
-      console.log('📤 Uploading file with multipart/form-data:', {
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type
-      });
-
-      const response = await fetch(`${API_BASE_URL}/brands`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Authorization': `Bearer ${validToken}`,
-          // Don't set Content-Type for FormData, let browser set it with boundary
-          // Browser will automatically set: Content-Type: multipart/form-data; boundary=----WebKitFormBoundary...
-        },
-        credentials: 'include',
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        const error = data as any;
-        
-        // Handle token expiration specifically
-        if (response.status === 401 && (error.error?.includes('expired') || error.error?.includes('invalid'))) {
-          console.log('🔄 Token expired, attempting refresh...');
-          
-          try {
-            // Try to refresh the token
-            const { AuthService } = await import('../auth/api');
-            const refreshResponse = await AuthService.refreshToken();
-            console.log('✅ Token refreshed successfully, retrying request...');
-            
-            // Retry the request with the new token
-            const retryResponse = await fetch(`${API_BASE_URL}/brands`, {
-              method: 'POST',
-              body: formData,
-              headers: {
-                'Authorization': `Bearer ${refreshResponse.accessToken}`,
-                // Don't set Content-Type for FormData, let browser set it with boundary
-              },
-              credentials: 'include',
-            });
-
-            const retryData = await retryResponse.json();
-            
-            if (!retryResponse.ok) {
-              throw new BrandsApiError(
-                retryData.error || 'Request failed after token refresh',
-                retryResponse.status,
-                retryData.code?.toString()
-              );
-            }
-            
-            return retryData as BulkCreateResponse;
-          } catch (refreshError) {
-            console.error('❌ Token refresh failed:', refreshError);
-            throw new BrandsApiError(
-              'Session expired. Please log in again.',
-              401,
-              'TOKEN_REFRESH_FAILED'
-            );
-          }
-        }
-        
-        throw new BrandsApiError(
-          error.error || 'A brands API error occurred',
-          response.status,
-          error.code?.toString()
-        );
-      }
-
-      return data as BulkCreateResponse;
-    } catch (error) {
-      if (error instanceof BrandsApiError) {
-        throw error;
-      }
-      
-      // Handle network or other errors
-      throw new BrandsApiError(
-        'Network error or server unavailable',
-        0,
-        'NETWORK_ERROR'
-      );
-    }
-  }
-}
-
-/**
- * Utility functions for brands
+ * Utility functions for brand operations
  */
 export class BrandsUtils {
   /**
-   * Get brand color based on name
+   * Format brand name for display
    */
-  static getBrandColor(name: string): string {
+  static formatBrandName(name: string): string {
+    return name.trim().replace(/\s+/g, ' ');
+  }
+
+  /**
+   * Validate brand name
+   */
+  static validateBrandName(name: string): { isValid: boolean; error?: string } {
+    if (!name || name.trim().length === 0) {
+      return { isValid: false, error: 'Brand name is required' };
+    }
+    
+    if (name.trim().length < 2) {
+      return { isValid: false, error: 'Brand name must be at least 2 characters' };
+    }
+    
+    if (name.trim().length > 100) {
+      return { isValid: false, error: 'Brand name must be less than 100 characters' };
+    }
+    
+    return { isValid: true };
+  }
+
+  /**
+   * Validate brand description
+   */
+  static validateBrandDescription(description: string): { isValid: boolean; error?: string } {
+    if (description && description.length > 500) {
+      return { isValid: false, error: 'Brand description must be less than 500 characters' };
+    }
+    
+    return { isValid: true };
+  }
+
+  /**
+   * Get brand color based on brand name
+   */
+  static getBrandColor(brandName: string): string {
+    // Create a simple hash from the brand name to get consistent colors
+    let hash = 0;
+    for (let i = 0; i < brandName.length; i++) {
+      const char = brandName.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    // Use the hash to select from a predefined color palette
     const colors = [
-      'bg-red-500',
-      'bg-blue-500', 
-      'bg-green-500',
-      'bg-yellow-500',
-      'bg-purple-500',
-      'bg-pink-500',
-      'bg-indigo-500',
-      'bg-teal-500',
-      'bg-orange-500',
-      'bg-gray-600'
+      'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500', 'bg-indigo-500',
+      'bg-yellow-500', 'bg-red-500', 'bg-teal-500', 'bg-orange-500', 'bg-cyan-500',
+      'bg-emerald-500', 'bg-violet-500', 'bg-rose-500', 'bg-amber-500', 'bg-lime-500'
     ];
     
-    const index = name.charCodeAt(0) % colors.length;
-    return colors[index];
+    const colorIndex = Math.abs(hash) % colors.length;
+    return colors[colorIndex];
   }
 
   /**
    * Format date for display
    */
-  static formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+  static formatDate(dateString: string | undefined): string {
+    if (!dateString) return 'Unknown';
+    
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return 'Invalid date';
+    }
   }
 
   /**
-   * Get relative time string
+   * Get relative time (e.g., "2 days ago")
    */
-  static getRelativeTime(dateString: string): string {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+  static getRelativeTime(dateString: string | undefined): string {
+    if (!dateString) return 'Unknown';
     
-    if (diffInMinutes < 1) {
-      return 'Just now';
-    } else if (diffInMinutes < 60) {
-      return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
-    } else if (diffInMinutes < 1440) {
-      const hours = Math.floor(diffInMinutes / 60);
-      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    } else {
-      const days = Math.floor(diffInMinutes / 1440);
-      return `${days} day${days > 1 ? 's' : ''} ago`;
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+      
+      if (diffInSeconds < 60) {
+        return 'Just now';
+      } else if (diffInSeconds < 3600) {
+        const minutes = Math.floor(diffInSeconds / 60);
+        return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+      } else if (diffInSeconds < 86400) {
+        const hours = Math.floor(diffInSeconds / 3600);
+        return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+      } else if (diffInSeconds < 2592000) {
+        const days = Math.floor(diffInSeconds / 86400);
+        return `${days} day${days !== 1 ? 's' : ''} ago`;
+      } else if (diffInSeconds < 31536000) {
+        const months = Math.floor(diffInSeconds / 2592000);
+        return `${months} month${months !== 1 ? 's' : ''} ago`;
+      } else {
+        const years = Math.floor(diffInSeconds / 31536000);
+        return `${years} year${years !== 1 ? 's' : ''} ago`;
+      }
+    } catch (error) {
+      return 'Invalid date';
     }
   }
 }

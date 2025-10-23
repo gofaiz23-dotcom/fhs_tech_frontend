@@ -32,9 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from './ui/badge'
 import { Skeleton } from './ui/skeleton'
 import UnifiedAddNew from './UnifiedAddNew'
-// import ListingsModal from './ListingsModal'
 import './table-scroll.css'
-import AddToListings from './AddToListings'
 
 const Products = () => {
   const { state } = useAuth()
@@ -42,16 +40,13 @@ const Products = () => {
   
   // Helper function to proxy backend images through Next.js API
   const getProxiedImageUrl = (imageUrl: string | null | undefined): string | null => {
-    if (!imageUrl || typeof imageUrl !== 'string') return null
+    if (!imageUrl) return null
     
     // Normalize the IP address to current backend IP
     let normalizedUrl = imageUrl
     if (imageUrl.includes('192.168.0.22:5000')) {
       normalizedUrl = imageUrl.replace('192.168.0.22:5000', '192.168.0.22:5000')
     }
-    
-    // Ensure normalizedUrl is still a string after processing
-    if (typeof normalizedUrl !== 'string') return null
     
     // If it's a backend URL, proxy it
     if (normalizedUrl.startsWith('http://192.168.0.22:5000/uploads/')) {
@@ -951,7 +946,7 @@ const Products = () => {
         title: product.title || '',
         category: product.category || '',
         collectionName: product.collectionName || '',
-        // shipTypes: product.shipTypes || '',
+        shipTypes: product.shipTypes || '',
         singleSetItem: product.singleSetItem || '',
         brandRealPrice: product.brandRealPrice || 0,
         brandMiscellaneous: product.brandMiscellaneous || 0,
@@ -963,16 +958,16 @@ const Products = () => {
         mainImageUrl: product.mainImageUrl || '',
         galleryImages: product.galleryImages || [],
         attributes: {
-          subCategory: product.attributes?.subCategory || product.attributes?.sub_category || '',
-          shortDescription: product.attributes?.shortDescription || product.attributes?.short_description || '',
-          fullDescription: product.attributes?.fullDescription || product.attributes?.description || '',
+          subCategory: product.attributes?.sub_category || '',
+          shortDescription: product.attributes?.short_description || '',
+          description: product.attributes?.description || '',
           origin: product.attributes?.origin || '',
-          shippingLength: product.attributes?.shippingLength || product.attributes?.shipping_length_in || 0,
-          shippingWidth: product.attributes?.shippingWidth || product.attributes?.shipping_width_in || 0,
-          shippingHeight: product.attributes?.shippingHeight || product.attributes?.shipping_height_in || 0,
-          volume: product.attributes?.volume || product.attributes?.volume_cuft || 0,
-          weight: product.attributes?.weight || product.attributes?.weight_lb || 0,
-          productDimension: product.attributes?.productDimension || product.attributes?.product_dimension_inch || '',
+          shippingLength: product.attributes?.shipping_length_in || 0,
+          shippingWidth: product.attributes?.shipping_width_in || 0,
+          shippingHeight: product.attributes?.shipping_height_in || 0,
+          volume: product.attributes?.volume_cuft || 0,
+          weight: product.attributes?.weight_lb || 0,
+          productDimension: product.attributes?.product_dimension_inch || '',
           style: product.attributes?.style || '',
           material: product.attributes?.material || '',
           color: product.attributes?.color || '',
@@ -1205,142 +1200,65 @@ const Products = () => {
     setError(null)
     
     try {
-      // Check if we have any file uploads
-      const hasFileUploads = listingsData.some(listing => listing.uploadedFiles && listing.uploadedFiles.length > 0)
+      // Prepare the payload
+      const payload = listingsData.map(listing => {
+        // Generate final SKU
+        const finalSku = listing.customSku ? `${listing.customSku}${listing.Sku}` : listing.Sku
+        
+        // Get selected sub SKUs (only those with quantity > 0)
+        const selectedSubSkus = listing.subSkus
+          .filter((ss: any) => ss.quantity > 0)
+          .map((ss: any) => ss.sku)
+          .join(',')
+        
+        return {
+          Sku: finalSku,
+          subSku: selectedSubSkus || listing.subSkus.map((ss: any) => ss.sku).join(','),
+          brandName: listing.brandName,
+          title: listing.title,
+          category: listing.category,
+          collectionName: listing.collectionName,
+          shipTypes: listing.shipTypes,
+          singleSetItem: listing.singleSetItem,
+          brandRealPrice: listing.brandRealPrice,
+          brandMiscellaneous: listing.brandMiscellaneous,
+          msrp: listing.msrp,
+          shippingPrice: listing.shippingPrice,
+          commissionPrice: listing.commissionPrice,
+          profitMarginPrice: listing.profitMarginPrice,
+          ecommerceMiscellaneous: listing.ecommerceMiscellaneous,
+          mainImageUrl: listing.mainImageUrl,
+          galleryImages: listing.galleryImages,
+          attributes: listing.attributes
+        }
+      })
       
-      if (hasFileUploads) {
-        // Use FormData for file uploads
-        const formData = new FormData()
-        
-        // Add listings data as JSON
-        const payload = listingsData.map(listing => {
-          // Generate final SKU
-          const finalSku = listing.customSku ? `${listing.customSku}${listing.Sku}` : listing.Sku
-          
-          // Get selected sub SKUs (only those with quantity > 0)
-          const selectedSubSkus = listing.subSkus
-            .filter((ss: any) => ss.quantity > 0)
-            .map((ss: any) => ss.sku)
-            .join(',')
-          
-          return {
-            Sku: finalSku,
-            subSku: selectedSubSkus || listing.subSkus.map((ss: any) => ss.sku).join(','),
-            brandName: listing.brandName,
-            title: listing.title,
-            category: listing.category,
-            collectionName: listing.collectionName,
-            shipTypes: listing.shipTypes,
-            singleSetItem: listing.singleSetItem,
-            brandRealPrice: listing.brandRealPrice,
-            brandMiscellaneous: listing.brandMiscellaneous,
-            msrp: listing.msrp,
-            shippingPrice: listing.shippingPrice,
-            commissionPrice: listing.commissionPrice,
-            profitMarginPrice: listing.profitMarginPrice,
-            ecommerceMiscellaneous: listing.ecommerceMiscellaneous,
-            mainImageUrl: listing.mainImageUrl,
-            galleryImages: listing.galleryImages,
-            attributes: listing.attributes
-          }
-        })
-        
-        // Add JSON data
-        formData.append('listings', JSON.stringify(payload))
-        
-        // Add uploaded files
-        listingsData.forEach((listing, index) => {
-          if (listing.uploadedFiles && listing.uploadedFiles.length > 0) {
-            listing.uploadedFiles.forEach((file: File) => {
-              formData.append('galleryImages', file)
-            })
-          }
-        })
-        
-        // Send to API with FormData
-        const response = await fetch('http://192.168.0.22:5000/api/listings', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${state.accessToken}`
-          },
-          body: formData
-        })
-        
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.message || 'Failed to create listings')
-        }
-        
-        const result = await response.json()
-        
-        // Show success message
-        toast({
-          variant: "success",
-          title: "Listings Created",
-          description: `Successfully created ${payload.length} listing(s) with images!`,
-        })
-        
-      } else {
-        // Use JSON for non-file uploads
-        const payload = listingsData.map(listing => {
-          // Generate final SKU
-          const finalSku = listing.customSku ? `${listing.customSku}${listing.Sku}` : listing.Sku
-          
-          // Get selected sub SKUs (only those with quantity > 0)
-          const selectedSubSkus = listing.subSkus
-            .filter((ss: any) => ss.quantity > 0)
-            .map((ss: any) => ss.sku)
-            .join(',')
-          
-          return {
-            Sku: finalSku,
-            subSku: selectedSubSkus || listing.subSkus.map((ss: any) => ss.sku).join(','),
-            brandName: listing.brandName,
-            title: listing.title,
-            category: listing.category,
-            collectionName: listing.collectionName,
-            shipTypes: listing.shipTypes,
-            singleSetItem: listing.singleSetItem,
-            brandRealPrice: listing.brandRealPrice,
-            brandMiscellaneous: listing.brandMiscellaneous,
-            msrp: listing.msrp,
-            shippingPrice: listing.shippingPrice,
-            commissionPrice: listing.commissionPrice,
-            profitMarginPrice: listing.profitMarginPrice,
-            ecommerceMiscellaneous: listing.ecommerceMiscellaneous,
-            mainImageUrl: listing.mainImageUrl,
-            galleryImages: listing.galleryImages,
-            attributes: listing.attributes
-          }
-        })
-        
-        // Prepare final payload based on single or multiple
-        const finalPayload = payload.length === 1 ? payload[0] : { listings: payload }
-        
-        // Send to API with JSON
-        const response = await fetch('http://192.168.0.22:5000/api/listings', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${state.accessToken}`
-          },
-          body: JSON.stringify(finalPayload)
-        })
-        
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.message || 'Failed to create listings')
-        }
-        
-        const result = await response.json()
-        
-        // Show success message
-        toast({
-          variant: "success",
-          title: "Listings Created",
-          description: `Successfully created ${payload.length} listing(s)!`,
-        })
+      // Prepare final payload based on single or multiple
+      const finalPayload = payload.length === 1 ? payload[0] : { listings: payload }
+      
+      // Send to API
+      const response = await fetch('http://192.168.0.22:5000/api/listings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${state.accessToken}`
+        },
+        body: JSON.stringify(finalPayload)
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to create listings')
       }
+      
+      const result = await response.json()
+      
+      // Show success message
+      toast({
+        variant: "success",
+        title: "Listings Created",
+        description: `Successfully created ${payload.length} listing(s)!`,
+      })
       
       // Close modal and clear selection
       handleCloseListings()
@@ -2159,7 +2077,7 @@ const Products = () => {
       brandId: product.brand?.id?.toString() || '',
       title: product.title,
       groupSku: product.groupSku,
-      subSku: product.subSku || '',
+      subSku: product.subSku,
       category: product.category,
       collectionName: product.collectionName,
       shipTypes: product.shipTypes || '',
@@ -2656,7 +2574,7 @@ const Products = () => {
     <div className="space-y-6">
       <Card className="dark:bg-slate-800 dark:border-slate-700">
         <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <CardTitle className="text-2xl font-bold text-gray-900 dark:text-slate-100">
               Products
             </CardTitle>
@@ -2686,7 +2604,7 @@ const Products = () => {
         
         <CardContent className="space-y-4">
           {/* Search and Filters Row */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col md:flex-row gap-3">
             {/* Search Bar */}
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -2712,7 +2630,7 @@ const Products = () => {
           
           {/* Collapsible Filters */}
           {showFilters && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
               <Select value={filters.category || 'all'} onValueChange={handleCategoryChange}>
                 <SelectTrigger className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600">
                   <SelectValue placeholder="Category" />
@@ -2906,13 +2824,12 @@ const Products = () => {
                                 className="hover:scale-105 transition-transform cursor-pointer rounded-full overflow-hidden border-2 border-emerald-500 dark:border-emerald-400"
                                 title={`Click to view all images`}
                               >
-                                {getProxiedImageUrl(product.mainImageUrl) && (
-                                  <img 
-                                    src={getProxiedImageUrl(product.mainImageUrl)!} 
-                                    alt={product.title}
-                                    className="w-10 h-10 rounded-full object-cover"
-                                    referrerPolicy="no-referrer"
-                                    loading="lazy"
+                                <img 
+                                  src={getProxiedImageUrl(product.mainImageUrl) || ''} 
+                                  alt={product.title}
+                                  className="w-10 h-10 rounded-full object-cover"
+                                  referrerPolicy="no-referrer"
+                                  loading="lazy"
                                   onError={(e) => {
                                     console.error('❌ Image failed to load:', product.mainImageUrl)
                                     console.error('Proxied URL:', getProxiedImageUrl(product.mainImageUrl))
@@ -2920,14 +2837,13 @@ const Products = () => {
                                     target.style.display = 'none'
                                     const parent = target.parentElement
                                     if (parent) {
-                                      parent.innerHTML = '<div class="w-10 h-10 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/20" title="Image failed to load - check console"><svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div>'
+                                      parent.innerHTML = '<div class="w-10 h-10 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/20 rounded" title="Image failed to load - check console"><svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div>'
                                     }
                                   }}
                                 />
-                                )}
                               </button>
                             ) : (
-                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-200 dark:bg-gray-700">
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 rounded">
                                 <ImageIcon className="h-5 w-5 text-gray-400" />
                               </div>
                             )}
@@ -2940,7 +2856,7 @@ const Products = () => {
                           {renderExpandableCell(product.groupSku, product.id, 'groupSku', 170)}
                         </TableCell>
                         <TableCell className="text-center" style={{ width: `${getColumnWidth('subSku', 170)}px` }}>
-                          {renderExpandableCell(product.subSku || '', product.id, 'subSku', 170)}
+                          {renderExpandableCell(product.subSku, product.id, 'subSku', 170)}
                         </TableCell>
                         <TableCell className="text-center" style={{ width: `${getColumnWidth('category', 170)}px` }}>
                           <Badge variant="outline" className="whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-300 dark:border-purple-700">
@@ -2962,39 +2878,39 @@ const Products = () => {
                         </TableCell>
                         <TableCell className="text-center" style={{ width: `${getColumnWidth('brandRealPrice', 170)}px` }}>
                           <div className="whitespace-nowrap text-green-600 dark:text-green-400 font-semibold">
-                            ${formatCurrency(product.brandRealPrice.toString())}
+                            ${formatCurrency(product.brandRealPrice)}
                           </div>
                         </TableCell>
                         <TableCell className="text-center" style={{ width: `${getColumnWidth('brandMisc', 170)}px` }}>
-                          <div className="whitespace-nowrap">${formatCurrency(product.brandMiscellaneous.toString())}</div>
+                          <div className="whitespace-nowrap">${formatCurrency(product.brandMiscellaneous)}</div>
                         </TableCell>
                         <TableCell className="text-center" style={{ width: `${getColumnWidth('brandPrice', 170)}px` }}>
                           <div className="whitespace-nowrap text-green-600 dark:text-green-400 font-semibold">
-                            ${formatCurrency(product.brandPrice.toString())}
+                            ${formatCurrency(product.brandPrice)}
                           </div>
                         </TableCell>
                         <TableCell className="text-center" style={{ width: `${getColumnWidth('msrp', 170)}px` }}>
                           <div className="whitespace-nowrap text-blue-600 dark:text-blue-400 font-semibold">
-                            ${formatCurrency(product.msrp.toString())}
+                            ${formatCurrency(product.msrp)}
                           </div>
                         </TableCell>
                         <TableCell className="text-center" style={{ width: `${getColumnWidth('shippingPrice', 170)}px` }}>
-                          <div className="whitespace-nowrap">${formatCurrency(product.shippingPrice.toString())}</div>
+                          <div className="whitespace-nowrap">${formatCurrency(product.shippingPrice)}</div>
                         </TableCell>
                         <TableCell className="text-center" style={{ width: `${getColumnWidth('commission', 170)}px` }}>
-                          <div className="whitespace-nowrap">${formatCurrency(product.commissionPrice.toString())}</div>
+                          <div className="whitespace-nowrap">${formatCurrency(product.commissionPrice)}</div>
                         </TableCell>
                         <TableCell className="text-center" style={{ width: `${getColumnWidth('profitMargin', 170)}px` }}>
                           <div className="whitespace-nowrap text-orange-600 dark:text-orange-400">
-                            ${formatCurrency(product.profitMarginPrice.toString())}
+                            ${formatCurrency(product.profitMarginPrice)}
                           </div>
                         </TableCell>
                         <TableCell className="text-center" style={{ width: `${getColumnWidth('ecomMisc', 170)}px` }}>
-                          <div className="whitespace-nowrap">${formatCurrency(product.ecommerceMiscellaneous.toString())}</div>
+                          <div className="whitespace-nowrap">${formatCurrency(product.ecommerceMiscellaneous)}</div>
                         </TableCell>
                         <TableCell className="text-center" style={{ width: `${getColumnWidth('ecomPrice', 170)}px` }}>
                           <div className="whitespace-nowrap text-indigo-600 dark:text-indigo-400 font-semibold">
-                            ${formatCurrency(product.ecommercePrice.toString())}
+                            ${formatCurrency(product.ecommercePrice)}
                           </div>
                         </TableCell>
                         <TableCell className="text-center" style={{ width: `${getColumnWidth('gallery', 170)}px` }}>
@@ -3005,13 +2921,12 @@ const Products = () => {
                                 className="hover:scale-105 transition-transform cursor-pointer rounded-full overflow-hidden border-2 border-cyan-500 dark:border-cyan-400 relative"
                                 title={`Click to view ${product.galleryImages.length} images: ${product.galleryImages[0]}`}
                               >
-                                {getProxiedImageUrl(product.galleryImages[0]) && (
-                                  <img 
-                                    src={getProxiedImageUrl(product.galleryImages[0])!} 
-                                    alt={`${product.title} - Gallery`}
-                                    className="w-10 h-10 object-cover"
-                                    referrerPolicy="no-referrer"
-                                    loading="lazy"
+                                <img 
+                                  src={getProxiedImageUrl(product.galleryImages[0]) || ''} 
+                                  alt={`${product.title} - Gallery`}
+                                  className="w-10 h-10 object-cover"
+                                  referrerPolicy="no-referrer"
+                                  loading="lazy"
                                   onError={(e) => {
                                     const imgUrl = product.galleryImages?.[0] || 'unknown'
                                     console.error('❌ Gallery image failed to load:', imgUrl)
@@ -3021,20 +2936,19 @@ const Products = () => {
                                     const parent = target.parentElement
                                     if (parent) {
                                       const imgCount = product.galleryImages?.length || 0
-                                      parent.innerHTML = '<div class="w-10 h-10 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/20" title="Gallery images failed to load - check console"><svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div><span class="absolute top-0 right-0 bg-cyan-500 text-white text-xs font-bold rounded-bl px-1.5 py-0.5 shadow-lg">' + imgCount + '</span>'
+                                      parent.innerHTML = '<div class="w-10 h-10 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/20 rounded" title="Gallery images failed to load - check console"><svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div><span class="absolute top-0 right-0 bg-cyan-500 text-white text-xs font-bold rounded-bl px-1.5 py-0.5 shadow-lg">' + imgCount + '</span>'
                                     }
                                   }}
                                   onLoad={() => {
                                     console.log('✓ Gallery image loaded successfully:', product.galleryImages?.[0])
                                   }}
                                 />
-                                )}
                                 <span className="absolute top-0 right-0 bg-cyan-500 text-white text-xs font-bold rounded-bl px-1.5 py-0.5 shadow-lg">
                                   {product.galleryImages.length}
                                 </span>
                               </button>
                             ) : (
-                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100 dark:bg-gray-800" title="No gallery images">
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded" title="No gallery images">
                               <Images className="h-5 w-5 text-gray-300 dark:text-gray-600" />
                               </div>
                             )}
@@ -3170,10 +3084,9 @@ const Products = () => {
                     {selectedProductInfo.mainImageUrl && (
                       <div>
                         <p className="text-xs font-medium text-gray-600 dark:text-slate-400 mb-2">Main Image</p>
-                        {getProxiedImageUrl(selectedProductInfo.mainImageUrl) && (
-                          <img
-                            src={getProxiedImageUrl(selectedProductInfo.mainImageUrl)!}
-                            alt="Main"
+                        <img
+                          src={getProxiedImageUrl(selectedProductInfo.mainImageUrl) || ''}
+                          alt="Main"
                           onClick={() => {
                             // Collect all images (main + gallery)
                             const allImages = [selectedProductInfo.mainImageUrl!]
@@ -3184,16 +3097,14 @@ const Products = () => {
                           }}
                           className="w-full h-40 object-cover rounded-full border-2 border-emerald-500 dark:border-emerald-400 shadow-md cursor-pointer hover:scale-105 transition-transform"
                         />
-                        )}
                       </div>
                     )}
                     {selectedProductInfo.galleryImages && selectedProductInfo.galleryImages.map((img, idx) => (
                       <div key={idx}>
                         <p className="text-xs font-medium text-gray-600 dark:text-slate-400 mb-2">Gallery {idx + 1}</p>
-                        {getProxiedImageUrl(img) && (
-                          <img
-                            src={getProxiedImageUrl(img)!}
-                            alt={`Gallery ${idx + 1}`}
+                        <img
+                          src={getProxiedImageUrl(img) || ''}
+                          alt={`Gallery ${idx + 1}`}
                           onClick={() => {
                             // Collect all images (main + gallery)
                             const allImages = [selectedProductInfo.mainImageUrl!]
@@ -3204,7 +3115,6 @@ const Products = () => {
                           }}
                           className="w-full h-40 object-cover rounded-lg border-2 border-cyan-500 dark:border-cyan-400 shadow-md cursor-pointer hover:scale-105 transition-transform"
                         />
-                        )}
                       </div>
                     ))}
                   </div>
@@ -3293,203 +3203,53 @@ const Products = () => {
                     <TableBody>
                       <TableRow>
                         <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50 w-48">Brand Real Price</TableCell>
-                        <TableCell className="text-green-600 dark:text-green-400 font-semibold">${formatCurrency(selectedProductInfo.brandRealPrice.toString())}</TableCell>
+                        <TableCell className="text-green-600 dark:text-green-400 font-semibold">${formatCurrency(selectedProductInfo.brandRealPrice)}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Brand Miscellaneous</TableCell>
-                        <TableCell>${formatCurrency(selectedProductInfo.brandMiscellaneous.toString())}</TableCell>
+                        <TableCell>${formatCurrency(selectedProductInfo.brandMiscellaneous)}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Brand Price</TableCell>
-                        <TableCell className="text-green-600 dark:text-green-400 font-semibold">${formatCurrency(selectedProductInfo.brandPrice.toString())}</TableCell>
+                        <TableCell className="text-green-600 dark:text-green-400 font-semibold">${formatCurrency(selectedProductInfo.brandPrice)}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">MSRP</TableCell>
-                        <TableCell className="text-blue-600 dark:text-blue-400 font-semibold">${formatCurrency(selectedProductInfo.msrp.toString())}</TableCell>
+                        <TableCell className="text-blue-600 dark:text-blue-400 font-semibold">${formatCurrency(selectedProductInfo.msrp)}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Shipping Price</TableCell>
-                        <TableCell>${formatCurrency(selectedProductInfo.shippingPrice.toString())}</TableCell>
+                        <TableCell>${formatCurrency(selectedProductInfo.shippingPrice)}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Commission Price</TableCell>
-                        <TableCell>${formatCurrency(selectedProductInfo.commissionPrice.toString())}</TableCell>
+                        <TableCell>${formatCurrency(selectedProductInfo.commissionPrice)}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Profit Margin Price</TableCell>
-                        <TableCell className="text-orange-600 dark:text-orange-400 font-semibold">${formatCurrency(selectedProductInfo.profitMarginPrice.toString())}</TableCell>
+                        <TableCell className="text-orange-600 dark:text-orange-400 font-semibold">${formatCurrency(selectedProductInfo.profitMarginPrice)}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Ecommerce Miscellaneous</TableCell>
-                        <TableCell>${formatCurrency(selectedProductInfo.ecommerceMiscellaneous.toString())}</TableCell>
+                        <TableCell>${formatCurrency(selectedProductInfo.ecommerceMiscellaneous)}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell className="font-semibold bg-gray-50 dark:bg-slate-700/50">Ecommerce Price</TableCell>
-                        <TableCell className="text-indigo-600 dark:text-indigo-400 font-semibold text-lg">${formatCurrency(selectedProductInfo.ecommercePrice.toString())}</TableCell>
+                        <TableCell className="text-indigo-600 dark:text-indigo-400 font-semibold text-lg">${formatCurrency(selectedProductInfo.ecommercePrice)}</TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>
                 </div>
               </div>
 
-              {/* Sub SKU Data Section */}
-              {selectedProductInfo.attributes?.subSkuData && (
-                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-slate-700/50 dark:to-slate-800/50 rounded-lg p-6 border border-indigo-200 dark:border-slate-600">
-                  <div className="flex items-center justify-between mb-6">
-                    <h4 className="text-xl font-bold text-gray-900 dark:text-slate-100 flex items-center gap-3">
-                      <div className="w-3 h-3 bg-indigo-500 rounded-full"></div>
-                      Sub SKU Data
-                      <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
-                        {Object.keys(selectedProductInfo.attributes.subSkuData).length} items
-                      </Badge>
-                    </h4>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {Object.entries(selectedProductInfo.attributes.subSkuData).map(([subSku, data]: [string, any]) => (
-                      <div key={subSku} className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-gray-200 dark:border-slate-600 shadow-sm hover:shadow-md transition-shadow">
-                        {/* Header */}
-                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200 dark:border-slate-600">
-                          <div className="flex items-center gap-3">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                            <h5 className="font-bold text-gray-900 dark:text-slate-100 text-lg">{subSku}</h5>
-                          </div>
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-300 dark:border-blue-700">
-                            {data.name || 'Unnamed Product'}
-                          </Badge>
-                        </div>
-                        
-                        {/* Content Grid */}
-                        <div className="space-y-4">
-                          {/* Product Information */}
-                          <div className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-4">
-                            <h6 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-                              Product Information
-                            </h6>
-                            <div className="space-y-2">
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-gray-600 dark:text-slate-400">Product Name:</span>
-                                <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">{data.name || 'N/A'}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-gray-600 dark:text-slate-400">Brand Real Price:</span>
-                                <span className="text-sm font-bold text-green-600 dark:text-green-400">
-                                  ${typeof data.brandRealPrice === 'number' ? data.brandRealPrice.toFixed(2) : data.brandRealPrice || '0.00'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Images Section */}
-                          <div className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-4">
-                            <h6 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 bg-purple-500 rounded-full"></div>
-                              Product Images
-                              <Badge variant="secondary" className="text-xs">
-                                {[data.mainImageUrl, ...(data.galleryImages || [])].filter(Boolean).length} total
-                              </Badge>
-                            </h6>
-                            
-                            <div className="flex flex-wrap gap-3">
-                              {/* Main Image */}
-                              {data.mainImageUrl && (
-                                <div className="relative group">
-                                  {getProxiedImageUrl(data.mainImageUrl) && (
-                                    <img
-                                      src={getProxiedImageUrl(data.mainImageUrl)!}
-                                      alt={`${data.name || subSku} - Main Image`}
-                                    className="w-20 h-20 object-cover rounded-lg border-2 border-emerald-500 dark:border-emerald-400 cursor-pointer hover:scale-105 transition-all duration-200 shadow-sm hover:shadow-md"
-                                    onClick={() => {
-                                      const allImages = [data.mainImageUrl]
-                                      if (data.galleryImages && data.galleryImages.length > 0) {
-                                        allImages.push(...data.galleryImages)
-                                      }
-                                      handleGalleryPreview(allImages, `${data.name || subSku} - Product Images`)
-                                    }}
-                                    onError={(e) => {
-                                      const target = e.currentTarget as HTMLImageElement
-                                      target.style.display = 'none'
-                                    }}
-                                  />
-                                  )}
-                                  <div className="absolute -top-2 -right-2 bg-emerald-500 text-white text-xs px-2 py-1 rounded-full font-semibold shadow-sm">
-                                    Main
-                                  </div>
-                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-lg transition-all duration-200 flex items-center justify-center">
-                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                      <div className="bg-white bg-opacity-90 rounded-full p-1">
-                                        <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                                        </svg>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {/* Gallery Images */}
-                              {data.galleryImages && data.galleryImages.map((img: string, idx: number) => (
-                                <div key={idx} className="relative group">
-                                  {getProxiedImageUrl(img) && (
-                                    <img
-                                      src={getProxiedImageUrl(img)!}
-                                      alt={`${data.name || subSku} - Gallery Image ${idx + 1}`}
-                                    className="w-20 h-20 object-cover rounded-lg border-2 border-cyan-500 dark:border-cyan-400 cursor-pointer hover:scale-105 transition-all duration-200 shadow-sm hover:shadow-md"
-                                    onClick={() => {
-                                      const allImages = [data.mainImageUrl]
-                                      if (data.galleryImages && data.galleryImages.length > 0) {
-                                        allImages.push(...data.galleryImages)
-                                      }
-                                      handleGalleryPreview(allImages, `${data.name || subSku} - Product Images`)
-                                    }}
-                                    onError={(e) => {
-                                      const target = e.currentTarget as HTMLImageElement
-                                      target.style.display = 'none'
-                                    }}
-                                  />
-                                  )}
-                                  <div className="absolute -top-2 -right-2 bg-cyan-500 text-white text-xs px-2 py-1 rounded-full font-semibold shadow-sm">
-                                    {idx + 1}
-                                  </div>
-                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-lg transition-all duration-200 flex items-center justify-center">
-                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                      <div className="bg-white bg-opacity-90 rounded-full p-1">
-                                        <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                                        </svg>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                              
-                              {/* No images placeholder */}
-                              {!data.mainImageUrl && (!data.galleryImages || data.galleryImages.length === 0) && (
-                                <div className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 dark:border-slate-600 flex flex-col items-center justify-center bg-gray-50 dark:bg-slate-700/50">
-                                  <ImageIcon className="h-6 w-6 text-gray-400 mb-1" />
-                                  <span className="text-xs text-gray-500 dark:text-slate-400">No Images</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Other Attributes */}
-              {selectedProductInfo.attributes && Object.keys(selectedProductInfo.attributes).filter(key => key !== 'subSkuData').length > 0 && (
+              {/* Attributes */}
+              {selectedProductInfo.attributes && Object.keys(selectedProductInfo.attributes).length > 0 && (
                 <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-slate-700/50 dark:to-slate-800/50 rounded-lg p-6 border border-amber-200 dark:border-slate-600">
-                  <h4 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">Other Product Attributes</h4>
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-4">Product Attributes</h4>
                   <div className="overflow-x-auto">
                     <Table>
                       <TableBody>
-                        {Object.entries(selectedProductInfo.attributes)
-                          .filter(([key]) => key !== 'subSkuData')
-                          .map(([key, value]) => {
+                        {Object.entries(selectedProductInfo.attributes).map(([key, value]) => {
                           // Format key nicely
                           const formattedKey = key
                             .replace(/_/g, ' ')
@@ -3625,7 +3385,9 @@ const Products = () => {
                       <div className="flex-1">
                         <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Sub SKU</label>
                       </div>
-                      
+                      <div className="w-40">
+                        <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Quantity</label>
+                      </div>
                       <div className="w-24"></div>
                     </div>
                     <div className="space-y-2">
@@ -3641,7 +3403,39 @@ const Products = () => {
                               required={index === 0}
                             />
                           </div>
-                          
+                          {/* <div className="w-40 flex items-center gap-1">
+                            <Button
+                              type="button"
+                              onClick={() => {
+                                const newSubSkus = [...subSkus]
+                                const currentQty = parseInt(newSubSkus[index].quantity) || 0
+                                newSubSkus[index].quantity = Math.max(0, currentQty - 1).toString()
+                                setSubSkus(newSubSkus)
+                              }}
+                              variant="outline"
+                              size="sm"
+                              className="h-9 w-9 p-0"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </Button>
+                            <div className="flex-1 text-center font-semibold text-sm py-2 px-2 border rounded bg-gray-50 dark:bg-gray-700">
+                              {item.quantity || '0'}
+                            </div>
+                            <Button
+                              type="button"
+                              onClick={() => {
+                                const newSubSkus = [...subSkus]
+                                const currentQty = parseInt(newSubSkus[index].quantity) || 0
+                                newSubSkus[index].quantity = (currentQty + 1).toString()
+                                setSubSkus(newSubSkus)
+                              }}
+                              variant="outline"
+                              size="sm"
+                              className="h-9 w-9 p-0"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </Button>
+                          </div> */}
                           <div className="w-24 flex gap-2">
                             {index === subSkus.length - 1 && (
                               <Button
@@ -3967,7 +3761,7 @@ const Products = () => {
                     <Input
                       type="text"
                       value={productFormData.attributes.product_dimension_inch}
-                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 bg-gray-100"
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 bg-gray-100 dark:bg-slate-600"
                       placeholder="Auto-calculated from Width × Length × Height"
                       readOnly
                     />
@@ -4113,7 +3907,7 @@ const Products = () => {
                       <div className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-gray-200 dark:border-slate-600">
                         {mainImageFile ? (
                           <>
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br from-emerald-100 to-green-100 dark:from-emerald-900/30 dark:to-green-900/30 border-2 border-emerald-500 dark:border-emerald-400 relative">
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br from-emerald-100 to-green-100 dark:from-emerald-900/30 dark:to-green-900/30 rounded border-2 border-emerald-500 dark:border-emerald-400 relative">
                               <Upload className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                               <div className="absolute -top-1 -right-1 bg-green-500 rounded-full p-0.5">
                                 <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -4136,7 +3930,7 @@ const Products = () => {
                         <img 
                           src={productFormData.mainImageUrl} 
                           alt="Main image preview" 
-                          className="w-10 h-10 rounded-full object-cover border border-gray-300 dark:border-slate-500"
+                          className="w-10 h-10 rounded-full object-cover rounded border border-gray-300 dark:border-slate-500"
                           onError={(e) => {
                             (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="64" height="64"%3E%3Crect fill="%23ddd" width="64" height="64"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E'
                           }}
@@ -4724,7 +4518,7 @@ const Products = () => {
                     <Input
                       type="text"
                       value={productFormData.attributes.product_dimension_inch}
-                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 bg-gray-100"
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 bg-gray-100 dark:bg-slate-600"
                       placeholder="Auto-calculated from Width × Length × Height"
                       readOnly
                     />
@@ -4870,7 +4664,7 @@ const Products = () => {
                       <div className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-slate-700/30 rounded-lg border border-gray-200 dark:border-slate-600">
                         {mainImageFile ? (
                           <>
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br from-emerald-100 to-green-100 dark:from-emerald-900/30 dark:to-green-900/30 border-2 border-emerald-500 dark:border-emerald-400 relative">
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br from-emerald-100 to-green-100 dark:from-emerald-900/30 dark:to-green-900/30 rounded border-2 border-emerald-500 dark:border-emerald-400 relative">
                               <Upload className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                               <div className="absolute -top-1 -right-1 bg-green-500 rounded-full p-0.5">
                                 <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -4893,7 +4687,7 @@ const Products = () => {
                         <img 
                           src={productFormData.mainImageUrl} 
                           alt="Main image preview" 
-                          className="w-10 h-10 rounded-full object-cover border border-gray-300 dark:border-slate-500"
+                          className="w-10 h-10 rounded-full object-cover rounded border border-gray-300 dark:border-slate-500"
                           onError={(e) => {
                             (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="64" height="64"%3E%3Crect fill="%23ddd" width="64" height="64"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E'
                           }}
@@ -6230,15 +6024,13 @@ const Products = () => {
                 </h3>
               </div>
               <div className="p-4 flex justify-center items-center bg-gray-50 dark:bg-slate-900">
-                {getProxiedImageUrl(previewImageUrl) && (
-                  <img
-                    src={getProxiedImageUrl(previewImageUrl)!}
-                    alt={previewImageTitle}
-                    className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl"
-                    onClick={(e) => e.stopPropagation()}
-                    referrerPolicy="no-referrer"
-                  />
-                )}
+                <img
+                  src={getProxiedImageUrl(previewImageUrl) || ''}
+                  alt={previewImageTitle}
+                  className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                  referrerPolicy="no-referrer"
+                />
               </div>
             </div>
           </div>
@@ -6283,15 +6075,13 @@ const Products = () => {
               {/* Image Display */}
               <div className="relative bg-gray-50 dark:bg-slate-900">
                 <div className="p-8 flex justify-center items-center min-h-[60vh]">
-                  {getProxiedImageUrl(galleryImages[currentGalleryIndex]) && (
-                    <img
-                      src={getProxiedImageUrl(galleryImages[currentGalleryIndex])!}
-                      alt={`${galleryTitle} - Image ${currentGalleryIndex + 1}`}
-                      className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-2xl"
-                      onClick={(e) => e.stopPropagation()}
-                      referrerPolicy="no-referrer"
-                    />
-                  )}
+                  <img
+                    src={getProxiedImageUrl(galleryImages[currentGalleryIndex]) || ''}
+                    alt={`${galleryTitle} - Image ${currentGalleryIndex + 1}`}
+                    className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                    referrerPolicy="no-referrer"
+                  />
                 </div>
                 
                 {/* Navigation Buttons */}
@@ -6341,14 +6131,12 @@ const Products = () => {
                             : 'border-gray-300 dark:border-gray-600 hover:border-cyan-400'
                         }`}
                       >
-                        {getProxiedImageUrl(img) && (
-                          <img
-                            src={getProxiedImageUrl(img)!}
-                            alt={`Thumbnail ${index + 1}`}
-                            className="w-20 h-20 object-cover"
-                            referrerPolicy="no-referrer"
-                          />
-                        )}
+                        <img
+                          src={getProxiedImageUrl(img) || ''}
+                          alt={`Thumbnail ${index + 1}`}
+                          className="w-20 h-20 object-cover"
+                          referrerPolicy="no-referrer"
+                        />
                       </button>
                     ))}
                   </div>
@@ -6359,24 +6147,753 @@ const Products = () => {
         </div>
       )}
       
-      {/* Add to Listings Modal - Enhanced */}
+      {/* Add to Listings Modal */}
       {showListingsModal && (
-        <AddToListings
-          isOpen={showListingsModal}
-          onClose={handleCloseListings}
-          listingsData={listingsData}
-          setListingsData={setListingsData}
-          combinationSuggestions={combinationSuggestions}
-          selectedCombination={selectedCombination}
-          onSelectCombination={handleSelectCombination}
-          error={error}
-          isSubmitting={isSubmittingListings}
-          onSubmit={handleSubmitListings}
-          getProxiedImageUrl={getProxiedImageUrl}
-          setPreviewImageUrl={setPreviewImageUrl}
-          setPreviewImageTitle={setPreviewImageTitle}
-          setShowImagePreview={setShowImagePreview}
-        />
+        <div 
+          className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto"
+          onClick={handleCloseListings}
+        >
+          <div 
+            className="bg-white dark:bg-slate-800 rounded-lg w-full max-w-6xl max-h-[90vh] overflow-y-auto my-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="sticky top-0 bg-white dark:bg-slate-800 border-b dark:border-slate-700 p-6 flex items-center justify-between z-10">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100">
+                  Add to Listings
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                  Configure {listingsData.length} product{listingsData.length !== 1 ? 's' : ''} for listing
+                </p>
+              </div>
+              <Button
+                onClick={handleCloseListings}
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            
+            {/* Content */}
+            <div className="p-6 space-y-8">
+              {error && (
+                <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-lg">
+                  {error}
+                </div>
+              )}
+              
+              {/* Combination Suggestions */}
+              {combinationSuggestions.length > 0 && (
+                <div className="bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/20 dark:to-indigo-900/20 border border-violet-200 dark:border-violet-800 rounded-lg p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Package2 className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
+                      Suggested Combinations
+                    </h3>
+                    <Badge className="bg-violet-600 text-white">
+                      {combinationSuggestions.length} combinations
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
+                    Select a combination to create a bundled listing, or keep individual listings below
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+                    {combinationSuggestions.map((combo) => (
+                      <div
+                        key={combo.id}
+                        onClick={() => handleSelectCombination(combo.id)}
+                        className={`cursor-pointer border-2 rounded-lg p-4 transition-all ${
+                          selectedCombination === combo.id
+                            ? 'border-violet-500 bg-violet-100 dark:bg-violet-900/40 shadow-lg'
+                            : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-violet-300 dark:hover:border-violet-600 hover:shadow-md'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge variant="outline" className="text-xs">
+                            {combo.productCount} Products
+                          </Badge>
+                        </div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-slate-100 line-clamp-2 mb-2">
+                          {combo.title}
+                        </p>
+                        <div className="space-y-1 text-xs text-gray-600 dark:text-slate-400">
+                          <p><span className="font-medium">Group SKU:</span> {combo.groupSku}</p>
+                          <p><span className="font-medium">Sub SKUs:</span> {combo.subSkus.length}</p>
+                          <p><span className="font-medium">Total MSRP:</span> ${combo.msrp?.toFixed(2) || '0.00'}</p>
+                        </div>
+                        <div className="mt-3 pt-3 border-t dark:border-slate-700">
+                          <p className="text-xs text-gray-500 dark:text-slate-500">
+                            Includes: {combo.products.map((p: Product) => p.title).join(', ')}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {selectedCombination !== null && (
+                    <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                      <p className="text-sm text-green-800 dark:text-green-200">
+                        ✓ Combination selected. The form below shows the combined listing details.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {listingsData.map((listing, listingIndex) => (
+                <div key={listingIndex} className="border dark:border-slate-700 rounded-lg p-6 space-y-6">
+                  {/* Product Header */}
+                  <div className="flex items-start gap-4 pb-4 border-b dark:border-slate-700">
+                    <div className="relative">
+                      {listing.mainImageUrl ? (
+                        <div className="relative group">
+                      <img 
+                            src={getProxiedImageUrl(listing.mainImageUrl) || listing.mainImageUrl} 
+                        alt={listing.title}
+                            className="w-24 h-24 object-cover rounded-lg border border-gray-200 dark:border-slate-600"
+                            onError={(e) => {
+                              e.currentTarget.src = '/placeholder-image.png'
+                            }}
+                          />
+                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity rounded-lg flex items-center justify-center">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 hover:bg-white text-gray-900"
+                              onClick={() => {
+                                setPreviewImageUrl(getProxiedImageUrl(listing.mainImageUrl) || listing.mainImageUrl)
+                                setPreviewImageTitle(listing.title)
+                                setShowImagePreview(true)
+                              }}
+                            >
+                              <Maximize2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-24 h-24 bg-gray-100 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 flex items-center justify-center">
+                          <ImageIcon className="h-8 w-8 text-gray-400" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
+                        Product {listingIndex + 1}
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-slate-400 mt-1 line-clamp-2">
+                        {listing.title}
+                      </p>
+                      {listing.mainImageUrl && (
+                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                          Click image to preview
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* SKU Configuration */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Custom SKU Prefix */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                        Custom SKU Prefix <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="text"
+                        value={listing.customSku}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          // Validation: Only A-Z, 0-9, and dash allowed
+                          const validPattern = /^[A-Z0-9-]*$/
+                          if (validPattern.test(value)) {
+                            updateListingData(listingIndex, 'customSku', value)
+                          }
+                        }}
+                        placeholder="Enter prefix (A-Z, 0-9, - only)"
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                        Only capital letters (A-Z), numbers (0-9), and dash (-) allowed. At least one dash (-) required.
+                      </p>
+                      {listing.customSku && (
+                        <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                          Final SKU: {listing.customSku}{listing.Sku}
+                        </p>
+                      )}
+                    </div>
+                    
+                    {/* Group SKU */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                        Group SKU <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="text"
+                        value={listing.Sku}
+                        onChange={(e) => updateListingData(listingIndex, 'Sku', e.target.value)}
+                        placeholder="Group SKU"
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                        {listing.originalGroupSku ? (
+                          <>
+                            <span className="font-medium text-violet-600 dark:text-violet-400">{listing.originalGroupSku}</span> is protected. You can add characters after it.
+                          </>
+                        ) : (
+                          'Enter or extend the Group SKU'
+                        )}
+                      </p>
+                      
+                    </div>
+                  </div>
+                  
+                   {/* Sub SKUs - Complete Rewrite */}
+                    {listing.subSkus && listing.subSkus.length > 0 && (
+                      <div>
+                       <div className="flex items-center justify-between mb-3">
+                         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">
+                           Sub SKUs <span className="text-red-500">*</span>
+                         </label>
+                         <Button
+                           type="button"
+                           size="sm"
+                           variant="outline"
+                           onClick={() => {
+                             setListingsData(prev => {
+                               const newData = [...prev]
+                               newData[listingIndex].subSkus.push({
+                                 sku: '',
+                                 quantity: 1,
+                                 isCustom: true
+                               })
+                               return newData
+                             })
+                           }}
+                           className="flex items-center gap-1"
+                         >
+                           <Plus className="h-3 w-3" />
+                           Add Sub SKU
+                         </Button>
+                       </div>
+                       <div className="space-y-3">
+                         {(() => {
+                           // Create groups of identical SKUs
+                           const skuGroups = new Map()
+                           listing.subSkus.forEach((subSku: any, index: number) => {
+                             if (!skuGroups.has(subSku.sku)) {
+                               skuGroups.set(subSku.sku, {
+                                 sku: subSku.sku,
+                                 count: 0,
+                                 isCustom: subSku.isCustom,
+                                 indices: []
+                               })
+                             }
+                             const group = skuGroups.get(subSku.sku)
+                             group.count++
+                             group.indices.push(index)
+                           })
+                           
+                          return Array.from(skuGroups.values()).map((group: any, groupIndex: number) => (
+                            <div key={`${listingIndex}-${group.sku}-${groupIndex}`} className="flex items-center gap-2">
+                              <div className="flex-1 relative">
+                                <Input
+                                  type="text"
+                                  value={Array(group.count).fill(group.sku).join(', ')}
+                                  onChange={(e) => {
+                                    const newValue = e.target.value.trim()
+                                    setListingsData(prev => {
+                                      const newData = [...prev]
+                                      group.indices.forEach((idx: number) => {
+                                        newData[listingIndex].subSkus[idx].sku = newValue
+                                      })
+                                      return newData
+                                    })
+                                  }}
+                                  placeholder={`Sub SKU ${groupIndex + 1}`}
+                                  className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600 pr-28"
+                                  required
+                                />
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-1 rounded text-xs font-semibold">
+                                   Count: {group.count}
+                                </div>
+                              </div>
+                               <Button
+                                 type="button"
+                                 size="sm"
+                                 variant="outline"
+                                 onClick={(e) => {
+                                   e.preventDefault()
+                                   e.stopPropagation()
+                                   handleAddDuplicateSubSku(listingIndex, group.sku)
+                                 }}
+                                 className="h-10 w-10 p-0"
+                                 title="Add one more instance"
+                               >
+                                 <Plus className="h-4 w-4" />
+                               </Button>
+                               <Button
+                                 type="button"
+                                 size="sm"
+                                 variant="outline"
+                                 onClick={(e) => {
+                                   e.preventDefault()
+                                   e.stopPropagation()
+                                   console.log('Removing one instance of SKU:', group.sku)
+                                   // Remove only one instance of this SKU
+                                   setListingsData(prev => {
+                                     const newData = [...prev]
+                                     // Find the last instance of this SKU and remove it
+                                     const lastIndex = newData[listingIndex].subSkus.map((s: any, idx: number) => 
+                                       s.sku === group.sku ? idx : -1
+                                     ).filter((idx: number) => idx !== -1).pop()
+                                     
+                                     if (lastIndex !== undefined) {
+                                       console.log('Removing instance at index:', lastIndex)
+                                       newData[listingIndex].subSkus.splice(lastIndex, 1)
+                                     }
+                                     return newData
+                                   })
+                                 }}
+                                 className="h-10 w-10 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                 title="Remove one instance"
+                               >
+                                 <X className="h-4 w-4" />
+                               </Button>
+                             </div>
+                           ))
+                         })()}
+                       </div>
+                       <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">
+                         [+] adds one more instance of the SKU, [X] removes one instance of the SKU. "Add Sub SKU" button adds a new blank SKU field.
+                       </p>
+                      </div>
+                    )}
+                  
+                  {/* Basic Information */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                        Brand Name <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="text"
+                        value={listing.brandName}
+                        onChange={(e) => updateListingData(listingIndex, 'brandName', e.target.value)}
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                        Category <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="text"
+                        value={listing.category}
+                        onChange={(e) => updateListingData(listingIndex, 'category', e.target.value)}
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                        Collection Name <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="text"
+                        value={listing.collectionName}
+                        onChange={(e) => updateListingData(listingIndex, 'collectionName', e.target.value)}
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Title */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                      Title <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="text"
+                      value={listing.title}
+                      onChange={(e) => updateListingData(listingIndex, 'title', e.target.value)}
+                      className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                      required
+                    />
+                  </div>
+                  
+                  {/* Description */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                      Description <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={listing.description || ''}
+                      onChange={(e) => updateListingData(listingIndex, 'description', e.target.value)}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                      placeholder="Enter product description..."
+                      required
+                    />
+                  </div>
+                  
+                  {/* Pricing Information */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                        Brand Real Price <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={listing.brandRealPrice}
+                        onChange={(e) => updateListingData(listingIndex, 'brandRealPrice', Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                        Brand Misc <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={listing.brandMiscellaneous}
+                        onChange={(e) => updateListingData(listingIndex, 'brandMiscellaneous', Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                        MSRP <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={listing.msrp}
+                        onChange={(e) => updateListingData(listingIndex, 'msrp', Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                        Shipping Price <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={listing.shippingPrice}
+                        onChange={(e) => updateListingData(listingIndex, 'shippingPrice', Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                        Commission Price <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={listing.commissionPrice}
+                        onChange={(e) => updateListingData(listingIndex, 'commissionPrice', Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                        Profit Margin <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={listing.profitMarginPrice}
+                        onChange={(e) => updateListingData(listingIndex, 'profitMarginPrice', Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                        Ecommerce Misc <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={listing.ecommerceMiscellaneous}
+                        onChange={(e) => updateListingData(listingIndex, 'ecommerceMiscellaneous', Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        required
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Shipping & Item Info */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                        Single/Set Item
+                      </label>
+                      <Input
+                        type="text"
+                        value={listing.singleSetItem}
+                        onChange={(e) => updateListingData(listingIndex, 'singleSetItem', e.target.value)}
+                        className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Attributes */}
+                  <div className="border-t dark:border-slate-700 pt-4">
+                    <h4 className="text-md font-semibold text-gray-900 dark:text-slate-100 mb-4">
+                      Product Attributes
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                          Sub Category
+                        </label>
+                        <Input
+                          type="text"
+                          value={listing.attributes.subCategory}
+                          onChange={(e) => updateListingData(listingIndex, 'attributes.subCategory', e.target.value)}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                          Color <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="text"
+                          value={listing.attributes.color}
+                          onChange={(e) => updateListingData(listingIndex, 'attributes.color', e.target.value)}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                          Style <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="text"
+                          value={listing.attributes.style}
+                          onChange={(e) => updateListingData(listingIndex, 'attributes.style', e.target.value)}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                          Material <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="text"
+                          value={listing.attributes.material}
+                          onChange={(e) => updateListingData(listingIndex, 'attributes.material', e.target.value)}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                          Origin <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="text"
+                          value={listing.attributes.origin}
+                          onChange={(e) => updateListingData(listingIndex, 'attributes.origin', e.target.value)}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                          Weight (lb) <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={listing.attributes.weight}
+                          onChange={(e) => updateListingData(listingIndex, 'attributes.weight', Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                          Volume (cu ft) <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={listing.attributes.volume}
+                          onChange={(e) => updateListingData(listingIndex, 'attributes.volume', Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                          Shipping Length (in) <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={listing.attributes.shippingLength}
+                          onChange={(e) => {
+                            const length = Math.max(0, parseFloat(e.target.value) || 0)
+                            updateListingData(listingIndex, 'attributes.shippingLength', length)
+                            // Auto-calculate product dimension
+                            const width = listing.attributes.shippingWidth || 0
+                            const height = listing.attributes.shippingHeight || 0
+                            if (length > 0 && width > 0 && height > 0) {
+                              const dimension = `${length}" × ${width}" × ${height}"`
+                              updateListingData(listingIndex, 'attributes.productDimension', dimension)
+                            }
+                          }}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                          Shipping Width (in) <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={listing.attributes.shippingWidth}
+                          onChange={(e) => {
+                            const width = Math.max(0, parseFloat(e.target.value) || 0)
+                            updateListingData(listingIndex, 'attributes.shippingWidth', width)
+                            // Auto-calculate product dimension
+                            const length = listing.attributes.shippingLength || 0
+                            const height = listing.attributes.shippingHeight || 0
+                            if (length > 0 && width > 0 && height > 0) {
+                              const dimension = `${length}" × ${width}" × ${height}"`
+                              updateListingData(listingIndex, 'attributes.productDimension', dimension)
+                            }
+                          }}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                          Shipping Height (in) <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={listing.attributes.shippingHeight}
+                          onChange={(e) => {
+                            const height = Math.max(0, parseFloat(e.target.value) || 0)
+                            updateListingData(listingIndex, 'attributes.shippingHeight', height)
+                            // Auto-calculate product dimension
+                            const length = listing.attributes.shippingLength || 0
+                            const width = listing.attributes.shippingWidth || 0
+                            if (length > 0 && width > 0 && height > 0) {
+                              const dimension = `${length}" × ${width}" × ${height}"`
+                              updateListingData(listingIndex, 'attributes.productDimension', dimension)
+                            }
+                          }}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                          Product Dimension (Auto-calculated) <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="text"
+                          value={listing.attributes.productDimension}
+                          onChange={(e) => updateListingData(listingIndex, 'attributes.productDimension', e.target.value)}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          placeholder="Will auto-calculate when length, width, and height are filled"
+                          required
+                        />
+                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                          Auto-calculated from length × width × height above
+                        </p>
+                      </div>
+                      <div className="md:col-span-3">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                          Short Description <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          type="text"
+                          value={listing.attributes.shortDescription}
+                          onChange={(e) => updateListingData(listingIndex, 'attributes.shortDescription', e.target.value)}
+                          className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
+                          required
+                          placeholder="Enter a brief description"
+                        />
+                      </div>
+                      <div className="md:col-span-3">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                          Full Description <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                          value={listing.attributes.fullDescription || ''}
+                          onChange={(e) => updateListingData(listingIndex, 'attributes.fullDescription', e.target.value)}
+                          rows={4}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                          placeholder="Enter detailed product description..."
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Footer */}
+            <div className="sticky bottom-0 bg-white dark:bg-slate-800 border-t dark:border-slate-700 p-6 flex justify-end gap-3">
+              <Button
+                onClick={handleCloseListings}
+                variant="outline"
+                disabled={isSubmittingListings}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmitListings}
+                className="bg-gradient-to-r from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white"
+                disabled={isSubmittingListings}
+              >
+                {isSubmittingListings ? 'Submitting...' : `Submit ${listingsData.length} Listing${listingsData.length !== 1 ? 's' : ''}`}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
       
       {/* Fullscreen Image Modal */}
@@ -6401,15 +6918,12 @@ const Products = () => {
             
             {/* Image */}
             <div className="flex-1 flex items-center justify-center">
-              {getProxiedImageUrl(fullscreenImageUrl) && (
-                <img
-                  src={getProxiedImageUrl(fullscreenImageUrl)!}
-                  alt={fullscreenImageTitle}
-                  className="max-w-full max-h-full object-contain"
-                  onClick={(e) => e.stopPropagation()}
-                  referrerPolicy="no-referrer"
-                />
-              )}
+              <img
+                src={getProxiedImageUrl(fullscreenImageUrl) || ''}
+                alt={fullscreenImageTitle}
+                className="max-w-full max-h-full object-contain"
+                onClick={(e) => e.stopPropagation()}
+              />
             </div>
             
             {/* Instructions */}

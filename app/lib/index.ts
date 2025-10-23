@@ -136,6 +136,15 @@ export type {
 // Brands
 // ============================================================================
 export { BrandsService, BrandsApiError, BrandsUtils } from './brands/api';
+export type {
+  BrandResponse,
+  BrandFilters,
+  CreateBrandRequest,
+  UpdateBrandRequest,
+  CreateBrandResponse,
+  UpdateBrandResponse,
+  DeleteBrandResponse,
+} from './brands/api';
 
 // ============================================================================
 // Marketplaces
@@ -157,6 +166,19 @@ export type {
   ProductsResponse,
   ProductsFilters,
 } from './products/api';
+
+// ============================================================================
+// Listings
+// ============================================================================
+export { ListingsService } from './listings/api';
+export type {
+  Listing,
+  ListingsResponse,
+  ListingsFilters,
+  ImageTemplateData,
+  ImageTemplateResponse,
+  BulkImageUploadResponse,
+} from './listings/api';
 
 // ============================================================================
 // Inventory
@@ -193,7 +215,7 @@ export type {
   SettingsResponse,
   BrandMapping,
   BrandsResponse,
-  UpdateBrandResponse,
+  // UpdateBrandResponse,
 } from './settings/api';
 
 // ============================================================================

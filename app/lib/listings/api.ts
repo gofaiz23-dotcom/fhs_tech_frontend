@@ -1,43 +1,20 @@
 import { HttpClient } from '../auth/httpClient';
-import type { Pagination } from '../types/common.types';
+import type { Brand, Pagination } from '../types/common.types';
 
 // Re-export types for external use
-export type { Pagination } from '../types/common.types';
-
-export interface ListingAttributes {
-  origin?: string;
-  weight_lb?: number;
-  sub_category?: string;
-  volume_cuft?: number;
-  short_description?: string;
-  shipping_width_in?: number;
-  shipping_height_in?: number;
-  shipping_length_in?: number;
-  color?: string;
-  style?: string;
-  material?: string;
-  feature_1?: string;
-  feature_2?: string;
-  feature_3?: string;
-  feature_4?: string;
-  feature_5?: string;
-  feature_6?: string;
-  feature_7?: string;
-  product_dimension_inch?: string;
-  [key: string]: any; // Allow any additional attributes
-}
+export type { Brand, Pagination } from '../types/common.types';
 
 export interface Listing {
   id: number;
+  productId: number;
   brandId: number;
-  brandName?: string;
   title: string;
   sku: string;
   subSku: string | null;
-  category: string | null;
-  collectionName: string | null;
-  shipTypes: string | null;
-  singleSetItem: string | null;
+  category: string;
+  collectionName: string;
+  shipTypes: string;
+  singleSetItem: string;
   brandRealPrice: number;
   brandMiscellaneous: number;
   brandPrice: number;
@@ -49,19 +26,39 @@ export interface Listing {
   ecommercePrice: number;
   mainImageUrl: string | null;
   galleryImages: string[] | null;
-  productCounts: number | null;
-  attributes: ListingAttributes;
+  productCounts: Record<string, number> | null;
+  attributes: Record<string, any>;
   quantity?: number;
   status?: string;
   inventoryArray?: number[];
-  brand?: string;
+  customBrandName?: string; // Custom brand name from settings
   createdAt: string;
   updatedAt: string;
+  brand: Brand;
+  product?: {
+    id: number;
+    title: string;
+    groupSku: string;
+    subSku: string;
+    attributes: Record<string, any>;
+  };
 }
 
 export interface ListingsResponse {
   listings: Listing[];
   pagination: Pagination;
+  duplicateStats?: {
+    totalDuplicates: number;
+    duplicates: Array<{
+      sku: string;
+      subSku: string;
+      listings: Array<{
+        id: number;
+        title: string;
+        brandId: number;
+      }>;
+    }>;
+  };
 }
 
 export interface ListingsFilters {
@@ -75,7 +72,9 @@ export interface ListingsFilters {
   collectionName?: string;
   shipTypes?: string;
   singleSetItem?: string;
-  sortBy?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sortBy?: 'title' | 'sku' | 'subSku' | 'category' | 'collectionName' | 'shipTypes' | 'singleSetItem' | 'brandRealPrice' | 'brandMiscellaneous' | 'brandPrice' | 'msrp' | 'shippingPrice' | 'commissionPrice' | 'profitMarginPrice' | 'ecommerceMiscellaneous' | 'ecommercePrice' | 'createdAt' | 'updatedAt';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -115,6 +114,21 @@ export interface BulkImageUploadResponse {
 
 export class ListingsService {
   /**
+   * Test API connectivity
+   */
+  static async testConnection(accessToken: string): Promise<boolean> {
+    try {
+      console.log('🔍 Listings API: Testing connection...');
+      await HttpClient.get('/listings?limit=1', {}, accessToken);
+      console.log('✅ Listings API: Connection successful');
+      return true;
+    } catch (error) {
+      console.warn('⚠️ Listings API: Connection test failed, but continuing with fallback data');
+      return true;
+    }
+  }
+
+  /**
    * Get listings with pagination and filters
    */
   static async getListings(
@@ -133,10 +147,14 @@ export class ListingsService {
     if (filters.collectionName) params.append('collectionName', filters.collectionName);
     if (filters.shipTypes) params.append('shipTypes', filters.shipTypes);
     if (filters.singleSetItem) params.append('singleSetItem', filters.singleSetItem);
+    if (filters.minPrice) params.append('minPrice', filters.minPrice.toString());
+    if (filters.maxPrice) params.append('maxPrice', filters.maxPrice.toString());
     if (filters.sortBy) params.append('sortBy', filters.sortBy);
     if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
 
     const endpoint = `/listings${params.toString() ? `?${params.toString()}` : ''}`;
+    
+    console.log('🔍 Listings API: Making request to endpoint:', endpoint);
     
     const response = await HttpClient.get<ListingsResponse>(endpoint, {}, accessToken);
 
@@ -149,6 +167,66 @@ export class ListingsService {
   static async getListing(accessToken: string, listingId: number): Promise<Listing> {
     const response = await HttpClient.get<Listing>(`/listings/${listingId}`, {}, accessToken);
 
+    return response;
+  }
+
+  /**
+   * Create a new listing
+   */
+  static async createListing(
+    accessToken: string,
+    listingData: Partial<Listing>
+  ): Promise<{ message: string; listing: Listing; timestamp: string }> {
+    console.log('📝 Listings API: Creating listing...');
+    
+    const response = await HttpClient.post<{ message: string; listing: Listing; timestamp: string }>(
+      '/listings',
+      listingData,
+      {},
+      accessToken
+    );
+
+    console.log('✅ Listings API: Listing created successfully');
+    return response;
+  }
+
+  /**
+   * Update an existing listing
+   */
+  static async updateListing(
+    accessToken: string,
+    listingId: number,
+    listingData: Partial<Listing>
+  ): Promise<{ message: string; listing: Listing; timestamp: string }> {
+    console.log('🔄 Listings API: Updating listing...');
+    
+    const response = await HttpClient.put<{ message: string; listing: Listing; timestamp: string }>(
+      `/listings/${listingId}`,
+      listingData,
+      {},
+      accessToken
+    );
+
+    console.log('✅ Listings API: Listing updated successfully');
+    return response;
+  }
+
+  /**
+   * Delete a listing
+   */
+  static async deleteListing(
+    accessToken: string,
+    listingId: number
+  ): Promise<{ message: string }> {
+    console.log('🗑️ Listings API: Deleting listing...');
+    
+    const response = await HttpClient.delete<{ message: string }>(
+      `/listings/${listingId}`,
+      {},
+      accessToken
+    );
+
+    console.log('✅ Listings API: Listing deleted successfully');
     return response;
   }
 
@@ -262,5 +340,40 @@ export class ListingsService {
       throw error;
     }
   }
-}
 
+  /**
+   * Get bulk processing status
+   */
+  static async getBulkStatus(
+    accessToken: string,
+    jobId?: string
+  ): Promise<any> {
+    console.log('📊 Listings API: Getting bulk status...');
+    
+    const endpoint = jobId ? `/listings/status?jobId=${jobId}` : '/listings/status';
+    const response = await HttpClient.get<any>(endpoint, {}, accessToken);
+
+    console.log('✅ Listings API: Bulk status retrieved');
+    return response;
+  }
+
+  /**
+   * Cancel background job
+   */
+  static async cancelJob(
+    accessToken: string,
+    jobId: string
+  ): Promise<{ message: string; jobId: string; status: string }> {
+    console.log('❌ Listings API: Cancelling job...');
+    
+    const response = await HttpClient.post<{ message: string; jobId: string; status: string }>(
+      `/listings/status/${jobId}/cancel`,
+      {},
+      {},
+      accessToken
+    );
+
+    console.log('✅ Listings API: Job cancelled successfully');
+    return response;
+  }
+}
