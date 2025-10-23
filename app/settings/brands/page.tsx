@@ -182,7 +182,7 @@ export default function BrandsPage() {
 
     try {
       setIsSubmitting(true);
-      const response = await BrandsService.createMultipleBrands({ brands: bulkBrands }, authState.accessToken);
+      const response = await BrandsService.createMultipleBrands(authState.accessToken, bulkBrands);
       setBulkResults(response);
       setShowBulkModal(false);
       setBulkBrands([]);

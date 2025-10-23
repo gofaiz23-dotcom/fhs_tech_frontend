@@ -175,6 +175,37 @@ export class BrandsService {
       return ['Furniture of America', 'IKEA', 'Ashley Furniture', 'West Elm', 'Crate & Barrel'];
     }
   }
+
+  /**
+   * Create multiple brands in bulk (Admin only)
+   */
+  static async createMultipleBrands(
+    accessToken: string,
+    brandsData: CreateBrandRequest[]
+  ): Promise<{ successful: Brand[]; failed: Array<{ data: CreateBrandRequest; error: string }> }> {
+    console.log('📝 Brands API: Creating multiple brands...');
+    
+    const results = {
+      successful: [] as Brand[],
+      failed: [] as Array<{ data: CreateBrandRequest; error: string }>
+    };
+
+    // Create brands one by one
+    for (const brandData of brandsData) {
+      try {
+        const response = await this.createBrand(accessToken, brandData);
+        results.successful.push(response.brand);
+      } catch (error: any) {
+        results.failed.push({
+          data: brandData,
+          error: error.message || 'Failed to create brand'
+        });
+      }
+    }
+
+    console.log(`✅ Brands API: Bulk creation completed. ${results.successful.length} successful, ${results.failed.length} failed`);
+    return results;
+  }
 }
 
 /**
