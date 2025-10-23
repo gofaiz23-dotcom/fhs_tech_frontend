@@ -22,8 +22,8 @@ import { AuthService, ensureValidToken } from '../auth/api';
 import { HttpClient } from '../auth/httpClient';
 
 // Base API configuration
-// const API_BASE_URL = 'http://192.168.0.22:5000/api';
-const API_BASE_URL = 'http://192.168.0.22:5000/api';
+// const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 const ADMIN_ENDPOINTS = {
   USERS_BASIC: `${API_BASE_URL}/admin/users/basic`,
   USERS_HISTORY: `${API_BASE_URL}/admin/users/history`,

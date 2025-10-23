@@ -112,7 +112,7 @@ function MyComponent() {
 
 Create `.env.local`:
 ```env
-NEXT_PUBLIC_API_URL=http://192.168.0.22:5000/api
+NEXT_PUBLIC_API_URL=http://localhost:5000/api
 ```
 
 Access in code:

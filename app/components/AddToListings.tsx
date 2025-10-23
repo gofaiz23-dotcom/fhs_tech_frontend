@@ -452,13 +452,13 @@ const GalleryImageManager = memo(({
   listing, 
   listingIndex, 
   updateListingData,
-  getProxiedImageUrl,
+  getImageUrl,
   onImagePreview
 }: { 
   listing: any
   listingIndex: number
   updateListingData: (index: number, field: string, value: any) => void
-  getProxiedImageUrl: (url: string | null) => string | null
+  getImageUrl: (url: string | null) => string | null
   onImagePreview: (url: string, title: string) => void
 }) => {
   const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null)
@@ -1013,15 +1013,15 @@ const DimensionCalculator = memo(({
 const ListingForm = memo(({ 
   listing, 
   listingIndex, 
-  updateListingData, 
-  getProxiedImageUrl, 
+  updateListingData,
+  getImageUrl,
   onImagePreview,
   validationErrors
 }: { 
   listing: any
   listingIndex: number
   updateListingData: (index: number, field: string, value: any) => void
-  getProxiedImageUrl: (url: string | null) => string | null
+  getImageUrl: (url: string | null) => string | null
   onImagePreview: (url: string, title: string) => void
   validationErrors: Record<string, string>
 }) => {
@@ -1055,11 +1055,11 @@ const ListingForm = memo(({
     }
   }, [listing.imageUrls, listingIndex, updateListingData])
   const handleImagePreview = useCallback(() => {
-    const imageUrl = getProxiedImageUrl(listing.mainImageUrl) || listing.mainImageUrl
+    const imageUrl = getImageUrl(listing.mainImageUrl) || listing.mainImageUrl
     if (imageUrl) {
       onImagePreview(imageUrl, listing.title)
     }
-  }, [listing.mainImageUrl, listing.title, getProxiedImageUrl, onImagePreview])
+  }, [listing.mainImageUrl, listing.title, getImageUrl, onImagePreview])
 
   const [showImageEditModal, setShowImageEditModal] = useState(false)
   const [editingImageType, setEditingImageType] = useState<'main' | 'gallery' | null>(null)
@@ -1108,7 +1108,7 @@ const ListingForm = memo(({
       {/* Product Header */}
       <div className="flex flex-col sm:flex-row items-start gap-4 pb-4 border-b dark:border-slate-700">
         <ProductImage
-          imageUrl={getProxiedImageUrl(listing.mainImageUrl)}
+          imageUrl={getImageUrl(listing.mainImageUrl)}
           title={listing.title}
           onPreview={handleImagePreview}
           onEdit={() => handleEditImage('main')}
@@ -1137,7 +1137,7 @@ const ListingForm = memo(({
                     title="Click to view all gallery images"
                   >
                     <img
-                      src={getProxiedImageUrl(img) || img}
+                      src={getImageUrl(img) || img}
                       alt={`Gallery ${idx + 1}`}
                       className="w-full h-full object-cover"
                       onError={(e) => {
@@ -1232,7 +1232,7 @@ const ListingForm = memo(({
         listing={listing}
         listingIndex={listingIndex}
         updateListingData={updateListingData}
-        getProxiedImageUrl={getProxiedImageUrl}
+        getImageUrl={getImageUrl}
         onImagePreview={onImagePreview}
       />
       
@@ -1586,7 +1586,7 @@ const ListingsModal = memo(({
   error,
   isSubmitting,
   onSubmit,
-  getProxiedImageUrl,
+  getImageUrl,
   setPreviewImageUrl,
   setPreviewImageTitle,
   setShowImagePreview
@@ -1601,7 +1601,7 @@ const ListingsModal = memo(({
   error: string | null
   isSubmitting: boolean
   onSubmit: () => void
-  getProxiedImageUrl: (url: string | null) => string | null
+  getImageUrl: (url: string | null) => string | null
   setPreviewImageUrl: (url: string) => void
   setPreviewImageTitle: (title: string) => void
   setShowImagePreview: (show: boolean) => void
@@ -1725,7 +1725,7 @@ const ListingsModal = memo(({
               listing={listing}
               listingIndex={listingIndex}
               updateListingData={updateListingData}
-              getProxiedImageUrl={getProxiedImageUrl}
+              getImageUrl={getImageUrl}
               onImagePreview={handleImagePreview}
               validationErrors={validationErrors}
             />

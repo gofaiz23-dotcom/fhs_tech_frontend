@@ -206,7 +206,7 @@ If you have existing code using hardcoded URLs or duplicate types:
 ### Before:
 ```typescript
 // Hardcoded URL
-const response = await fetch('http://192.168.0.22:5000/api/products');
+const response = await fetch('http://localhost:5000/api/products');
 
 // Duplicate interface
 interface Brand {
