@@ -506,7 +506,7 @@ export default function BrandsPage() {
           isDeleting={isSubmitting}
           warningMessage="This will permanently delete the brand and all associated data."
           additionalInfo={selectedBrand ? [
-            { label: 'Description', value: selectedBrand.description },
+            { label: 'Description', value: selectedBrand.description || 'No description' },
             { label: 'ID', value: selectedBrand.id.toString() }
           ] : []}
         />
