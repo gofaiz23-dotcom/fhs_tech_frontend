@@ -292,4 +292,27 @@ export class BrandsUtils {
     
     return { isValid: true };
   }
+
+  /**
+   * Get brand color based on brand name
+   */
+  static getBrandColor(brandName: string): string {
+    // Create a simple hash from the brand name to get consistent colors
+    let hash = 0;
+    for (let i = 0; i < brandName.length; i++) {
+      const char = brandName.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    // Use the hash to select from a predefined color palette
+    const colors = [
+      'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-pink-500', 'bg-indigo-500',
+      'bg-yellow-500', 'bg-red-500', 'bg-teal-500', 'bg-orange-500', 'bg-cyan-500',
+      'bg-emerald-500', 'bg-violet-500', 'bg-rose-500', 'bg-amber-500', 'bg-lime-500'
+    ];
+    
+    const colorIndex = Math.abs(hash) % colors.length;
+    return colors[colorIndex];
+  }
 }
