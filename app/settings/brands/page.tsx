@@ -208,7 +208,7 @@ export default function BrandsPage() {
         lastModified: uploadFile.lastModified
       });
       
-      const response = await BrandsService.uploadBrandsFromFile(uploadFile, authState.accessToken);
+      const response = await BrandsService.uploadBrandsFromFile(authState.accessToken, uploadFile);
       console.log('✅ Upload successful:', response);
       setBulkResults(response);
       setShowUploadModal(false);

@@ -206,6 +206,36 @@ export class BrandsService {
     console.log(`✅ Brands API: Bulk creation completed. ${results.successful.length} successful, ${results.failed.length} failed`);
     return results;
   }
+
+  /**
+   * Upload brands from file (CSV/Excel) (Admin only)
+   */
+  static async uploadBrandsFromFile(
+    accessToken: string,
+    file: File
+  ): Promise<{ successful: Brand[]; failed: Array<{ data: any; error: string }> }> {
+    console.log('📁 Brands API: Uploading brands from file...');
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      const response = await HttpClient.post<{
+        successful: Brand[];
+        failed: Array<{ data: any; error: string }>;
+        message: string;
+      }>('/brands/upload', formData, {}, accessToken);
+      
+      console.log('✅ Brands API: File upload completed');
+      return {
+        successful: response.successful || [],
+        failed: response.failed || []
+      };
+    } catch (error: any) {
+      console.error('❌ Brands API: File upload failed:', error);
+      throw new BrandsApiError(`Failed to upload brands: ${error.message || 'Unknown error'}`);
+    }
+  }
 }
 
 /**
