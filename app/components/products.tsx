@@ -955,6 +955,7 @@ const Products = () => {
           quantity: 1
         })),
         brandName: product.brand?.name || '',
+        brandId: product.brand?.id || '',
         title: product.title || '',
         category: product.category || '',
         collectionName: product.collectionName || '',
