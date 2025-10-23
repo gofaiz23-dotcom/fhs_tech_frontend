@@ -18,7 +18,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react'
-import { Search, Download, Plus, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Image as ImageIcon, Images, Building2, Package2, Filter, Edit, Trash2, Globe, FileText, Upload, Warehouse, Maximize2, Minimize2, Minus } from 'lucide-react'
+import { Search, Download, Plus, Info, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Image as ImageIcon, Images, Building2, Package2, Filter, Edit, Trash2, Globe, FileText, Upload, Warehouse, Maximize2, Minimize2, Minus, Link } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { useToast } from '../lib/hooks/use-toast'
 import { Button } from './ui/button'
@@ -2904,6 +2904,38 @@ const Listings = () => {
               <div className="border dark:border-slate-700 rounded-lg p-4">
                 <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-slate-100">Images</h3>
                 
+                {/* Image Type Toggle Buttons */}
+                <div className="mb-4">
+                  <div className="flex gap-2 mb-4">
+                    <Button
+                      type="button"
+                      variant={!mainImageFile ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setMainImageFile(null)
+                        setListingFormData({...listingFormData, mainImageUrl: ''})
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <Link className="h-4 w-4" />
+                      URL
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={mainImageFile ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setListingFormData({...listingFormData, mainImageUrl: ''})
+                        document.getElementById('main-image-file-upload')?.click()
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <Upload className="h-4 w-4" />
+                      File
+                    </Button>
+                  </div>
+                </div>
+                
                 {/* Main Image */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-slate-300">
@@ -2919,7 +2951,6 @@ const Listings = () => {
                         className="dark:bg-slate-700 dark:text-slate-100 dark:border-slate-600"
                       />
                     </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400 self-center">OR</div>
                     <div>
                       <input
                         type="file"
@@ -2931,7 +2962,8 @@ const Listings = () => {
                             setListingFormData({...listingFormData, mainImageUrl: ''})
                           }
                         }}
-                        className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-slate-700 dark:file:text-slate-300"
+                        className="hidden"
+                        id="main-image-file-upload"
                       />
                     </div>
                   </div>
@@ -2947,6 +2979,39 @@ const Listings = () => {
                   <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-slate-300">
                     Gallery Images
                   </label>
+                  
+                  {/* Gallery Image Type Toggle Buttons */}
+                  <div className="mb-4">
+                    <div className="flex gap-2 mb-4">
+                      <Button
+                        type="button"
+                        variant={galleryImageFiles.length === 0 ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setGalleryImageFiles([])
+                          setListingFormData({...listingFormData, galleryImages: ['']})
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <Link className="h-4 w-4" />
+                        URL
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={galleryImageFiles.length > 0 ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setListingFormData({...listingFormData, galleryImages: []})
+                          document.getElementById('gallery-images-file-upload')?.click()
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <Upload className="h-4 w-4" />
+                        File
+                      </Button>
+                    </div>
+                  </div>
+                  
                   <div className="space-y-3">
                     {listingFormData.galleryImages.map((url, index) => (
                       <div key={index} className="flex gap-2">
