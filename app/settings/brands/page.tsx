@@ -264,7 +264,7 @@ export default function BrandsPage() {
   // Filter brands based on search term
   const filteredBrands = brands.filter(brand =>
     brand.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    brand.description.toLowerCase().includes(searchTerm.toLowerCase())
+    (brand.description || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
