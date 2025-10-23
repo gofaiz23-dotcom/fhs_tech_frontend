@@ -233,7 +233,7 @@ export class BrandsService {
       };
     } catch (error: any) {
       console.error('❌ Brands API: File upload failed:', error);
-      throw new BrandsApiError(`Failed to upload brands: ${error.message || 'Unknown error'}`);
+      throw new BrandsApiError(`Failed to upload brands: ${error.message || 'Unknown error'}`, 500, 'UPLOAD_FAILED');
     }
   }
 }
